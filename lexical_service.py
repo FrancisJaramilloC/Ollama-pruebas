@@ -29,12 +29,6 @@ Analiza el siguiente fragmento y asigna tokens a las palabras o frases que recon
 Fragmento: "{block_text}"
 
 
-
-
-
-
-
-
 Tokens disponibles (usa UNICAMENTE estos):
 - INSTRUCCION_INCORPORAR: verbos que indican agregar o incorporar (ej: "agregar", "anadir", "poner")
 - CANTIDAD_TAZAS: SOLO cuando aparece explicitamente la palabra "taza" o "tazas". Ejemplos validos: "una taza de", "un par de tazas de", "dos tazas de". NO clasifiques si no aparece la palabra "taza/tazas".
@@ -51,6 +45,46 @@ Responde UNICAMENTE con un JSON plano donde cada clave sea el texto clasificado 
 Ejemplo: {{"agregar": "INSTRUCCION_INCORPORAR", "un par de tazas de": "CANTIDAD_TAZAS"}}
 
 No uses markdown. No agregues comentarios ni texto adicional. Solo JSON."""
+
+    # ------------------------------------------------------------------
+    # Validacion de clasificaciones del LLM
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _validate_classifications(
+        classifications: dict, block_text: str
+    ) -> dict:
+        KNOWN_INSTRUCCION_INCORPORAR = {
+            "agregar", "anadir", "añadir", "poner", "incorporar",
+            "adicionar", "echar", "verter", "colocar", "agrega",
+            "agregue", "anade", "añade"
+        }
+        KNOWN_INSTRUCCION_MEZCLAR = {
+            "mezclar", "batir", "revolver", "remover", "agitar",
+            "mezcle", "bata", "revuelva", "mezcla", "bate"
+        }
+
+        valid = {}
+        for fragment, token_type in classifications.items():
+            fragment_lower = fragment.strip().lower()
+
+            if token_type == "CANTIDAD_TAZAS":
+                if "taza" in fragment_lower:
+                    valid[fragment] = token_type
+
+            elif token_type == "INSTRUCCION_INCORPORAR":
+                first_word = fragment_lower.split()[0]
+                if first_word in KNOWN_INSTRUCCION_INCORPORAR:
+                    valid[fragment] = token_type
+
+            elif token_type == "INSTRUCCION_MEZCLAR":
+                first_word = fragment_lower.split()[0]
+                if first_word in KNOWN_INSTRUCCION_MEZCLAR:
+                    valid[fragment] = token_type
+
+            else:
+                valid[fragment] = token_type
+
+        return valid
 
     # ------------------------------------------------------------------
     # Tarea del AFD (clasifica tokens duros: NUMERO, CONECTOR_Y)
@@ -94,15 +128,22 @@ No uses markdown. No agregues comentarios ni texto adicional. Solo JSON."""
         except (json.JSONDecodeError, ValueError):
             classifications = {}
 
+        validated = self._validate_classifications(classifications, block_text)
+
         elapsed_ms = (time.time() - start) * 1000
         print(
             f"  [LLM] '{thread_name}' clasifico bloque {idx} "
             f"('{block_text[:30]}...') en {elapsed_ms:.2f}ms"
         )
+        if validated != classifications:
+            print(
+                f"    -> clasificaciones invalidas filtradas: "
+                f"{ {k: classifications[k] for k in set(classifications) - set(validated)} }"
+            )
         return {
             "idx": idx,
             "text": block_text,
-            "classifications": classifications
+            "classifications": validated
         }
 
     # ------------------------------------------------------------------
