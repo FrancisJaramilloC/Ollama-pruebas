@@ -1,3 +1,5 @@
+import os
+
 import requests
 
 
@@ -6,11 +8,12 @@ class OllamaClient:
     def __init__(
         self,
         model: str = "llama3.2:3b",
-        host: str = "http://localhost:11434/api/generate",
+        host: str | None = None,
         timeout: int = 300
     ) -> None:
         self.model = model
-        self.host = host
+        ollama_host = host or os.getenv("OLLAMA_HOST", "http://localhost:11434")
+        self.host = f"{ollama_host.rstrip('/')}/api/generate"
         self.timeout = timeout
 
     def generate(self, prompt: str) -> str:

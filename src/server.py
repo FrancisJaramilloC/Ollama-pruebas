@@ -2,9 +2,9 @@ import json
 import sys
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
-from ollama_client import OllamaClient
-from lexical_service import LexicalService
-from syntactic_service import SyntacticService
+from src.clients.ollama import OllamaClient
+from src.analyzers.lexical import LexicalService
+from src.analyzers.syntactic import SyntacticService
 
 
 class CompilerHandler(BaseHTTPRequestHandler):

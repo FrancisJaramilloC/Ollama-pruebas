@@ -21,17 +21,23 @@ Iniciar el servidor:
 
 ```bash
 source .venv/bin/activate
-python server.py
+python -m src.server
 ```
 
 ## Estructura
 
-| Archivo | Proposito |
-|---|---|
-| `ollama_client.py` | Cliente HTTP para peticiones POST a `/api/generate` de Ollama |
-| `lexical_service.py` | Analisis lexico concurrente: AFD + LLM via ThreadPoolExecutor |
-| `syntactic_service.py` | Gramatica formal (BNF) + analisis sintactico via LLM |
-| `server.py` | Servidor HTTP (un puerto: 8000) para probar desde Insomnia |
+```
+src/
+├── __init__.py
+├── server.py              # Servidor HTTP (puerto 8000)
+├── clients/
+│   ├── __init__.py
+│   └── ollama.py          # Cliente HTTP para Ollama
+└── analyzers/
+    ├── __init__.py
+    ├── lexical.py          # Analisis lexico (AFD + LLM)
+    └── syntactic.py        # Analisis sintactico (gramatica BNF + LLM)
+```
 
 ## Arquitectura concurrente (Fase 1 — Analisis lexico)
 
@@ -77,7 +83,7 @@ Iniciar el servidor:
 
 ```bash
 source .venv/bin/activate
-python server.py
+python -m src.server
 ```
 
 En Insomnia:

@@ -1,0 +1,41 @@
+networks:
+  recipe-net:
+    driver: bridge
+
+services:
+  nodo-principal:
+    build: .
+    container_name: nodo-principal
+    ports:
+      - "8001:8000"
+    networks:
+      - recipe-net
+    environment:
+      OLLAMA_HOST: "http://host.docker.internal:11434"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  nodo-replica:
+    build: .
+    container_name: nodo-replica
+    ports:
+      - "8002:8000"
+    networks:
+      - recipe-net
+    environment:
+      OLLAMA_HOST: "http://host.docker.internal:11434"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  balanceador:
+    image: nginx:alpine
+    container_name: balanceador
+    ports:
+      - "8080:80"
+    networks:
+      - recipe-net
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - nodo-principal
+      - nodo-replica
