@@ -23,28 +23,28 @@ class LexicalService:
     def _build_prompt(self, block_text: str) -> str:
         return f"""
 Eres un clasificador lexico especializado en recetas de cocina.
-
-Analiza el siguiente fragmento y asigna tokens a las palabras o frases que reconozcas:
+Analiza a detalle el siguiente fragmento de texto y asigna tokens a las palabras o frases que reconozcas:
 
 Fragmento: "{block_text}"
 
-
-Tokens disponibles (usa UNICAMENTE estos):
+Tokens disponibles:
 - INSTRUCCION_INCORPORAR: verbos que indican agregar o incorporar (ej: "agregar", "anadir", "poner")
-- CANTIDAD_TAZAS: SOLO cuando aparece explicitamente la palabra "taza" o "tazas". Ejemplos validos: "una taza de", "un par de tazas de", "dos tazas de". NO clasifiques si no aparece la palabra "taza/tazas".
-- INSTRUCCION_MEZCLAR: instrucciones de mezclado con tiempo (ej: "mezclar por", "batir durante")
+- CANTIDAD: SOLO cuando aparece explicitamente la palabra "taza", "tazas", "porcion", "porciones", "gramos" o "gr". Ejemplos validos: "una porcion de", "un par de tazas de", "dos tazas de", "500 gramos de", "100 gr de". NO clasifiques si no aparece la palabra.
+- INSTRUCCION_MEZCLAR: instrucciones de mezclado con tiempo (ej: "mezclar por", "batir durante", "hornear durante", "licuar por", "reposar")
 
 Instrucciones:
 1. Identifica dentro del fragmento las palabras o frases que coincidan con los tokens.
 2. Asigna UNICAMENTE los tokens listados.
 3. Si hay multiples clasificaciones, inclu yelas todas.
-4. Omite texto que no coincida con ningun token.
+4. Omite texto que no coincida con ningun token, siempre y cuando no interfiera con el análisis.
 
 Responde UNICAMENTE con un JSON plano donde cada clave sea el texto clasificado y cada valor sea el token.
 
-Ejemplo: {{"agregar": "INSTRUCCION_INCORPORAR", "un par de tazas de": "CANTIDAD_TAZAS"}}
+Ejemplo: {{"agregar": "INSTRUCCION_INCORPORAR", "un par de tazas de": "CANTIDAD"}}
 
-No uses markdown. No agregues comentarios ni texto adicional. Solo JSON."""
+No uses markdown.
+No agregues comentarios ni texto adicional. 
+Utiliza un lenguaje claro, sencillo y facil de entender. """
 
     # ------------------------------------------------------------------
     # Validacion de clasificaciones del LLM
@@ -67,8 +67,8 @@ No uses markdown. No agregues comentarios ni texto adicional. Solo JSON."""
         for fragment, token_type in classifications.items():
             fragment_lower = fragment.strip().lower()
 
-            if token_type == "CANTIDAD_TAZAS":
-                if "taza" in fragment_lower:
+            if token_type == "CANTIDAD":
+                if any(keyword in fragment_lower for keyword in ["taza", "tazas", "porcion", "porciones", "gramos", "gr"]):
                     valid[fragment] = token_type
 
             elif token_type == "INSTRUCCION_INCORPORAR":

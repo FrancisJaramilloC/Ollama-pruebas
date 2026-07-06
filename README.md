@@ -30,10 +30,10 @@ python server.py
 |---|---|
 | `ollama_client.py` | Cliente HTTP para peticiones POST a `/api/generate` de Ollama |
 | `lexical_service.py` | Analisis lexico concurrente: AFD + LLM via ThreadPoolExecutor |
-| `syntactic_service.py` | Analisis sintactico con reglas gramaticales |
+| `syntactic_service.py` | Gramatica formal (BNF) + analisis sintactico via LLM |
 | `server.py` | Servidor HTTP (un puerto: 8000) para probar desde Insomnia |
 
-## Arquitectura concurrente
+## Arquitectura concurrente (Fase 1 — Analisis lexico)
 
 1. El scanner tokeniza la entrada con regex, separando tokens duros (NUMERO, CONECTOR_Y) de bloques UNKNOWN.
 2. El AFD clasifica los tokens duros en el hilo principal.
@@ -41,10 +41,27 @@ python server.py
 4. AFD y LLM se ejecutan en paralelo; el tiempo total es el maximo entre ambos, no la suma.
 5. Los resultados se unifican preservando el orden original.
 
+## Gramatica formal (Fase 2 — Analisis sintactico)
+
+La gramatica del DSL de recetas esta definida en `syntactic_service.py` en notacion BNF:
+
+```
+<receta>       ::= <instruccion> { CONECTOR_Y <instruccion> }
+<instruccion>  ::= <agregar> | <mezclar>
+<agregar>      ::= INSTRUCCION_INCORPORAR CANTIDAD_TAZAS { UNKNOWN }
+<mezclar>      ::= INSTRUCCION_MEZCLAR NUMERO { UNKNOWN }
+```
+
 ## Reglas gramaticales
 
+El LLM recibe estas reglas junto con los tokens y la gramatica, y determina si hay error:
+
+- Toda instruccion debe comenzar con `INSTRUCCION_INCORPORAR` o `INSTRUCCION_MEZCLAR`
 - `INSTRUCCION_INCORPORAR` debe ir seguido de `CANTIDAD_TAZAS`
 - `INSTRUCCION_MEZCLAR` debe ir seguido de `NUMERO`
+- Las instrucciones deben estar separadas por `CONECTOR_Y`
+- No puede haber dos `CONECTOR_Y` consecutivos
+- La secuencia no puede terminar con `CONECTOR_Y`
 
 ## Entrada de ejemplo
 
@@ -88,7 +105,6 @@ Respuesta esperada:
     {"type": "NUMERO", "value": "5", "origin": "AFD"},
     {"type": "UNKNOWN", "value": "minutos", "origin": "LLM"}
   ],
-  "sintaxis": {"valid": true, "error": null},
-  "log_concurrencia": "..."
+  "sintaxis": {"valid": true, "error": null}
 }
 ```

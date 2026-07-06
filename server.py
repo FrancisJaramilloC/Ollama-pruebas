@@ -28,7 +28,7 @@ class CompilerHandler(BaseHTTPRequestHandler):
         lexer = LexicalService(llm)
         tokens = lexer.analyze(source)
 
-        parser = SyntacticService(tokens)
+        parser = SyntacticService(llm, tokens)
         sintaxis = parser.validate()
 
         self._send_json(200, {

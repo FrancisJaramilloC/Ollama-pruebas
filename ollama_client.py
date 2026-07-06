@@ -7,7 +7,7 @@ class OllamaClient:
         self,
         model: str = "llama3.2:3b",
         host: str = "http://localhost:11434/api/generate",
-        timeout: int = 120
+        timeout: int = 300
     ) -> None:
         self.model = model
         self.host = host
@@ -21,7 +21,8 @@ class OllamaClient:
                 "prompt": prompt,
                 "stream": False,
                 "options": {
-                    "temperature": 0.0
+                    "temperature": 0.0,
+                    "num_predict": 256
                 }
             },
             timeout=self.timeout
