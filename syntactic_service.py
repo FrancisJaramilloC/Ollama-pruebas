@@ -28,7 +28,7 @@ class SyntacticService:
     GRAMMAR = """
 <receta> ::= <instruccion> { CONECTOR_Y <instruccion> }
 <instruccion> ::= <agregar> | <mezclar>
-<agregar> ::= INSTRUCCION_INCORPORAR CANTIDAD { UNKNOWN }
+<agregar> ::= INSTRUCCION_INCORPORAR ( CANTIDAD | NUMERO CANTIDAD ) { UNKNOWN }
 <mezclar> ::= INSTRUCCION_MEZCLAR NUMERO { UNKNOWN }
 """
 
@@ -36,7 +36,7 @@ class SyntacticService:
     # REGLAS GRAMATICALES
     # ------------------------------------------------------------------
     RULES = [
-        "INSTRUCCION_INCORPORAR debe ir seguido inmediatamente de CANTIDAD",
+        "INSTRUCCION_INCORPORAR debe ir seguido de una cantidad (tazas, gramos, porciones, etc.)",
         "INSTRUCCION_MEZCLAR debe ir seguido inmediatamente de NUMERO",
         "CONECTOR_Y solo puede aparecer entre dos instrucciones",
         "No puede haber dos CONECTOR_Y consecutivos",
@@ -60,23 +60,47 @@ class SyntacticService:
             ttype = token["type"]
             tvalue = token["value"]
 
-            # --- Regla 1: INSTRUCCION_INCORPORAR -> CANTIDAD_TAZAS ---
+            # --- Regla 1: INSTRUCCION_INCORPORAR -> CANTIDAD | NUMERO CANTIDAD ---
             if ttype == "INSTRUCCION_INCORPORAR":
                 if i + 1 >= len(self.tokens):
                     return {
                         "valid": False,
                         "error": (
-                            f"Despues de '{tvalue}' debes indicar una cantidad "
-                            f"en tazas (ejemplo: '{tvalue} una taza de harina'), "
+                            f"Despues de '{tvalue}' debe ir una cantidad "
+                            f"(ejemplo: '{tvalue} una taza de harina' "
+                            f"o '{tvalue} 100 gr de azucar'), "
                             f"pero la receta termina ahi."
                         )
                     }
-                if "CANTIDAD" not in self.tokens[i + 1]["type"]:
+
+                next_type = self.tokens[i + 1]["type"]
+
+                # Pattern A: INSTRUCCION_INCORPORAR -> CANTIDAD
+                if "CANTIDAD" in next_type:
+                    pass  # valido
+
+                # Pattern B: INSTRUCCION_INCORPORAR -> NUMERO -> CANTIDAD
+                elif next_type == "NUMERO":
+                    if i + 2 >= len(self.tokens) or "CANTIDAD" not in self.tokens[i + 2]["type"]:
+                        return {
+                            "valid": False,
+                            "error": (
+                                f"Despues de '{tvalue} {self.tokens[i + 1]['value']}' "
+                                f"debe ir una unidad de medida "
+                                f"(ejemplo: '{tvalue} 100 gr de azucar'), "
+                                f"pero se encontro "
+                                f"'{self.tokens[i + 2]['value'] if i + 2 < len(self.tokens) else 'fin de la receta'}'."
+                            )
+                        }
+
+                # Error: no es CANTIDAD ni NUMERO
+                else:
                     return {
                         "valid": False,
                         "error": (
-                            f"Despues de '{tvalue}' debes indicar una cantidad "
-                            f"en tazas (ejemplo: '{tvalue} una taza de harina'), "
+                            f"Despues de '{tvalue}' debe ir una cantidad "
+                            f"(ejemplo: '{tvalue} una taza de harina' "
+                            f"o '{tvalue} 100 gr de azucar'), "
                             f"pero se encontro '{self.tokens[i + 1]['value']}'."
                         )
                     }

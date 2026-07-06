@@ -60,8 +60,15 @@ Utiliza un lenguaje claro, sencillo y facil de entender. """
         }
         KNOWN_INSTRUCCION_MEZCLAR = {
             "mezclar", "batir", "revolver", "remover", "agitar",
-            "mezcle", "bata", "revuelva", "mezcla", "bate"
+            "mezcle", "bata", "revuelva", "mezcla", "bate",
+            "licuar", "licue", "hornear", "hornee", "reposar",
+            "cocinar", "cocine", "hervir", "hierva", "asar",
+            "ase", "dorar", "dore", "saltear", "saltee"
         }
+        CONCORDANCIA_ERRONEA = [
+            "un tazas", "un taza", "una tazas", "el tazas",
+            "la tazas", "los taza", "las taza"
+        ]
 
         valid = {}
         for fragment, token_type in classifications.items():
@@ -69,6 +76,8 @@ Utiliza un lenguaje claro, sencillo y facil de entender. """
 
             if token_type == "CANTIDAD":
                 if any(keyword in fragment_lower for keyword in ["taza", "tazas", "porcion", "porciones", "gramos", "gr"]):
+                    if any(error in fragment_lower for error in CONCORDANCIA_ERRONEA):
+                        continue
                     valid[fragment] = token_type
 
             elif token_type == "INSTRUCCION_INCORPORAR":
