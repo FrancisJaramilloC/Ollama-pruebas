@@ -36,9 +36,10 @@ class SyntacticService:
     # REGLAS GRAMATICALES
     # ------------------------------------------------------------------
     RULES = [
+        "La receta debe comenzar con una instruccion (agregar, mezclar, batir, licuar, etc.)",
         "INSTRUCCION_INCORPORAR debe ir seguido de una cantidad (tazas, gramos, porciones, etc.)",
         "INSTRUCCION_MEZCLAR debe ir seguido inmediatamente de NUMERO",
-        "CONECTOR_Y solo puede aparecer entre dos instrucciones",
+        "CONECTOR_Y separa dos instrucciones y debe ir seguido de una instruccion",
         "No puede haber dos CONECTOR_Y consecutivos",
         "La secuencia no puede comenzar con CONECTOR_Y",
         "La secuencia no puede terminar con CONECTOR_Y",
@@ -55,12 +56,26 @@ class SyntacticService:
     # token cumpla con las reglas gramaticales. Es deterministico,
     # instantaneo y no depende del LLM.
     # ==================================================================
+    INSTRUCCIONES = {"INSTRUCCION_INCORPORAR", "INSTRUCCION_MEZCLAR"}
+
     def _check_rules(self) -> dict:
+        # --- Regla 1: La receta debe comenzar con una instruccion valida ---
+        if self.tokens[0]["type"] not in self.INSTRUCCIONES:
+            return {
+                "valid": False,
+                "error": (
+                    "La receta debe comenzar con una accion valida "
+                    "(ejemplo: 'agregar una taza de harina' o "
+                    "'mezclar por 5 minutos'), "
+                    f"pero comienza con '{self.tokens[0]['value']}'."
+                )
+            }
+
         for i, token in enumerate(self.tokens):
             ttype = token["type"]
             tvalue = token["value"]
 
-            # --- Regla 1: INSTRUCCION_INCORPORAR -> CANTIDAD | NUMERO CANTIDAD ---
+            # --- Regla 2: INSTRUCCION_INCORPORAR -> CANTIDAD | NUMERO CANTIDAD ---
             if ttype == "INSTRUCCION_INCORPORAR":
                 if i + 1 >= len(self.tokens):
                     return {
@@ -105,7 +120,7 @@ class SyntacticService:
                         )
                     }
 
-            # --- Regla 2: INSTRUCCION_MEZCLAR -> NUMERO ---
+            # --- Regla 3: INSTRUCCION_MEZCLAR -> NUMERO ---
             if ttype == "INSTRUCCION_MEZCLAR":
                 if i + 1 >= len(self.tokens):
                     return {
@@ -126,33 +141,34 @@ class SyntacticService:
                         )
                     }
 
-            # --- Regla 4: No dos CONECTOR_Y consecutivos ---
+            # --- Regla 4: CONECTOR_Y debe ir seguido de una instruccion ---
+            if ttype == "CONECTOR_Y":
+                if i + 1 >= len(self.tokens):
+                    return {
+                        "valid": False,
+                        "error": (
+                            "La receta no puede terminar con la palabra 'y'."
+                        )
+                    }
+                if self.tokens[i + 1]["type"] not in self.INSTRUCCIONES:
+                    return {
+                        "valid": False,
+                        "error": (
+                            f"Despues de 'y' debe ir una accion valida "
+                            f"(ejemplo: '... y agregar ...' o '... y mezclar ...'), "
+                            f"pero se encontro '{self.tokens[i + 1]['value']}'."
+                        )
+                    }
+
+            # --- Regla 5: No dos CONECTOR_Y consecutivos ---
             if ttype == "CONECTOR_Y":
                 if i + 1 < len(self.tokens) and self.tokens[i + 1]["type"] == "CONECTOR_Y":
                     return {
                         "valid": False,
                         "error": (
-                            f"La palabra 'y' no puede repetirse dos veces seguidas."
+                            "La palabra 'y' no puede repetirse dos veces seguidas."
                         )
                     }
-
-        # --- Regla 5: No comenzar con CONECTOR_Y ---
-        if self.tokens[0]["type"] == "CONECTOR_Y":
-            return {
-                "valid": False,
-                "error": (
-                    "La receta no puede comenzar con la palabra 'y'."
-                )
-            }
-
-        # --- Regla 6: No terminar con CONECTOR_Y ---
-        if self.tokens[-1]["type"] == "CONECTOR_Y":
-            return {
-                "valid": False,
-                "error": (
-                    "La receta no puede terminar con la palabra 'y'."
-                )
-            }
 
         return {"valid": True, "error": None}
 
