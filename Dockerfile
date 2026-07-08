@@ -9,4 +9,4 @@ COPY src/ src/
 
 EXPOSE 8000
 
-CMD ["python", "-m", "src.server"]
+CMD ["python", "-m", "src.server", "8000"]
