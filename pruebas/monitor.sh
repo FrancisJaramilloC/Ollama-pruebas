@@ -2,8 +2,11 @@
 # Uso: ./monitor.sh <nombre_prueba>
 # Ejemplo: ./monitor.sh ab_test_1
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 TEST_NAME="${1:-prueba}"
-OUTPUT_DIR="resultados/$TEST_NAME"
+OUTPUT_DIR="$REPO_ROOT/resultados/$TEST_NAME"
 mkdir -p "$OUTPUT_DIR"
 
 echo "=== MONITOREO: $TEST_NAME ==="

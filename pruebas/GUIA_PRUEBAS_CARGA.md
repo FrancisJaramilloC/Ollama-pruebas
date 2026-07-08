@@ -3,7 +3,7 @@
 ## Arquitectura
 
 ```
-Herramienta de Carga  ──►  NGINX :8080  ──┬──►  Nodo Principal :8001
+Herramienta de Carga  ──►  NGINX :80   ──┬──►  Nodo Principal :8001
 (ab / Locust / JMeter /      (round-robin) └──►  Nodo Réplica   :8002
  Insomnia Runner)
                                               Ambos usan Ollama :11434
@@ -13,9 +13,9 @@ Herramienta de Carga  ──►  NGINX :8080  ──┬──►  Nodo Principal
 |---|---|---|
 | **nodo-principal** | 8001 | Procesa recetas, replica a la réplica |
 | **nodo-replica** | 8002 | Procesa recetas, recibe replicación |
-| **balanceador** (NGINX) | 8080 | Round-robin entre los 2 nodos |
+| **balanceador** (NGINX) | 80 | Round-robin entre los 2 nodos |
 
-Todas las requests van al **balanceador** (`:8080`), que distribuye entre ambos nodos.
+Todas las requests van al **balanceador** (`:80`), que distribuye entre ambos nodos.
 
 ---
 
@@ -44,9 +44,9 @@ Todas las requests van al **balanceador** (`:8080`), que distribuye entre ambos 
 ```bash
 ss -tlnp | grep 11434          # Ollama debe mostrar *:11434
 docker ps                       # Los 3 contenedores deben estar "Up"
-curl -s http://localhost:8080/  # Balanceador responde
-curl -s http://localhost:8001/  # Nodo principal responde
-curl -s http://localhost:8002/  # Nodo réplica responde
+curl -s http://localhost/       # Balanceador responde
+curl -s http://localhost:8001/health  # Nodo principal responde
+curl -s http://localhost:8002/health  # Nodo réplica responde
 ```
 
 ---
@@ -104,7 +104,7 @@ echo '{"source": "incorporar 2 tazas de harina y mezclar 5 minutos"}' > /tmp/pay
 
 # Ejecutar: 10 requests, 2 simultáneos
 ab -n 10 -c 2 -p /tmp/payload.json -T application/json \
-  http://localhost:8080/analyze > resultados/ab_resultados.txt
+  http://localhost/analyze > resultados/ab_resultados.txt
 ```
 
 | Flag | Significado |
@@ -158,13 +158,13 @@ Herramienta Python con código simple. El `locustfile.py` ya está listo.
 
 ```bash
 # Headless: 3 usuarios, 1 usuario/segundo, 60 segundos
-locust -f locustfile.py --host=http://localhost:8080 --headless \
+locust -f locustfile.py --host=http://localhost --headless \
   -u 3 -r 1 -t 60s \
   --csv resultados/locust_results \
   --html resultados/locust_report.html
 
 # Con web UI (abrir http://localhost:8089)
-locust -f locustfile.py --host=http://localhost:8080
+locust -f locustfile.py --host=http://localhost
 ```
 
 | Flag | Qué hace |
@@ -189,12 +189,12 @@ locust -f locustfile.py --host=http://localhost:8080
 
 **2. Agregar requests**
 - Click derecho en la colección → New Request
-- Método: `POST`, URL: `http://localhost:8080/analyze`
+- Método: `POST`, URL: `http://localhost/analyze`
 - Body → JSON: `{"source": "incorporar 2 tazas de harina"}`
 - Crea varias requests iguales con distintas recetas (puedes duplicar y cambiar el body)
 
 **3. Health check (opcional)**
-- Nueva request: `GET http://localhost:8080/`
+- Nueva request: `GET http://localhost/`
 
 **4. Ejecutar Runner**
 - `Ctrl+Shift+R` o View → Toggle Runner
@@ -225,7 +225,7 @@ echo "receta,status,tiempo_ms" > resultados/insomnia_results.csv
 for receta in "${RECETAS[@]}"; do
   INICIO=$(date +%s%N)
   STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-    -X POST http://localhost:8080/analyze \
+    -X POST http://localhost/analyze \
     -H "Content-Type: application/json" \
     -d "{\"source\":\"$receta\"}" --max-time 120)
   FIN=$(date +%s%N)
@@ -282,7 +282,7 @@ Completa estas tablas con los resultados de cada herramienta:
 
 | Problema | Revisar |
 |---|---|
-| **Balanceador no responde** | `docker compose logs balanceador` · `ss -tlnp \| grep 8080` |
+| **Balanceador no responde** | `docker compose logs balanceador` · `ss -tlnp \| grep 80` |
 | **Ollama no accesible** | `ss -tlnp \| grep 11434` → debe mostrar `*:11434` (no `127.0.0.1`). Si está mal: `pkill ollama && OLLAMA_HOST=0.0.0.0 nohup ollama serve &` |
 | **Request se cuelga** | `docker compose logs nodo-principal --tail 20` · Probar con `curl --max-time 90` |
 | **Réplica sin datos** | `curl -X POST http://localhost:8002/internal/sync` · Verificar: `curl -s http://localhost:8001/internal/recipes` vs `curl -s http://localhost:8002/internal/recipes` |
@@ -306,5 +306,5 @@ Completa estas tablas con los resultados de cada herramienta:
 ```bash
 docker compose down
 docker volume rm ollama-pruebas_recipe-data
-ss -tlnp | grep -E "8001|8002|8080|11434"
+ss -tlnp | grep -E "8001|8002|80|11434"
 ```

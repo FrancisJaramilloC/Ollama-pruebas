@@ -6,6 +6,8 @@ Mini-compilador con ejecucion concurrente: AFD y LLM trabajan en paralelo median
 
 - Python 3.10+
 - Ollama corriendo en `http://localhost:11434` con el modelo `llama3.2:3b`
+- Redis para la capa de cache compartida
+- MariaDB primaria y MariaDB secundaria con replicacion activa
 
 ## Instalacion
 
@@ -24,12 +26,18 @@ source .venv/bin/activate
 python -m src.server
 ```
 
+Si usas Docker Compose, el stack levanta dos nodos de aplicacion, una BD primaria, una BD secundaria replicada, Redis como cache compartido y un balanceador Nginx expuesto en el puerto 80. Los nodos exponen `/health` para sus healthchecks.
+
+## Pruebas manuales y de carga
+
+Todos los archivos de prueba quedaron agrupados en [pruebas/](pruebas): guía de carga, JMeter, Locust, monitoreo y script automático.
+
 ## Estructura
 
 ```
 src/
 ├── __init__.py
-├── server.py              # Servidor HTTP (puerto 8000)
+├── server.py              # Servidor HTTP (nodos en 8001/8002)
 ├── clients/
 │   ├── __init__.py
 │   └── ollama.py          # Cliente HTTP para Ollama
@@ -75,9 +83,20 @@ El LLM recibe estas reglas junto con los tokens y la gramatica, y determina si h
 agregar un par de tazas de harina y mezclar por 5 minutos
 ```
 
+## Arquitectura de datos
+
+La persistencia ahora usa una topologia centralizada:
+
+1. La aplicacion escribe en la BD primaria.
+2. La BD secundaria recibe la replicacion desde la primaria.
+3. Las lecturas usan la secundaria cuando esta disponible.
+4. Redis actua como cache compartida para `get_all` y `get_by_id`, con write-through al guardar.
+
+Esto reemplaza el esquema anterior de una BD por nodo.
+
 ## Peticion HTTP para Insomnia
 
-Un solo puerto expuesto al usuario: `8000` (el servidor del compilador). Internamente llama a Ollama en `11434`.
+El puerto expuesto al usuario es `80` a traves del balanceador Nginx. Los nodos de aplicacion corren en `8001` y `8002`, e internamente llaman a Ollama en `11434`.
 
 Iniciar el servidor:
 
@@ -89,7 +108,7 @@ python -m src.server
 En Insomnia:
 
 ```
-POST http://localhost:8000/analyze
+POST http://localhost/analyze
 Content-Type: application/json
 
 {

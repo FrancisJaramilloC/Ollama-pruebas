@@ -8,11 +8,9 @@ from src.clients.ollama import OllamaClient
 from src.analyzers.lexical import LexicalService
 from src.analyzers.syntactic import SyntacticService
 from src.storage import RecipeStorage
-from src.sync import RecipeSync
 
 
 storage = RecipeStorage()
-sync_service = RecipeSync(storage)
 
 
 class CompilerHandler(BaseHTTPRequestHandler):
@@ -24,20 +22,39 @@ class CompilerHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/")
 
+        if method == "GET" and path == "/health":
+            self._handle_health()
+            return
+        elif method == "GET" and path == "":
+            self._handle_root()
+            return
         if method == "POST" and path == "/analyze":
             self._handle_analyze()
+            return
         elif method == "GET" and path == "/internal/recipes":
             self._handle_get_recipes()
+            return
         elif method == "POST" and path == "/internal/recipes":
             self._handle_receive_recipe()
+            return
         elif method == "POST" and path == "/internal/sync":
             self._handle_trigger_sync()
+            return
         else:
             self._send_json(404, {"error": "Ruta no encontrada"})
 
     # ------------------------------------------------------------------
     # Endpoint publico: POST /analyze
     # ------------------------------------------------------------------
+    def _handle_health(self):
+        self._send_json(200, {"status": "ok", "node": os.environ.get("NODE_ROLE", "unknown")})
+
+    def _handle_root(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"OK")
+
     def _handle_analyze(self):
         content_length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(content_length)
@@ -66,14 +83,10 @@ class CompilerHandler(BaseHTTPRequestHandler):
             "sintaxis": sintaxis
         }
 
-        # Persistir y replicar
+        # Persistir en la base central y dejar la coherencia entre primary/replica a la BD
         record = storage.save(source, tokens, sintaxis)
         result["id"] = record["id"]
         result["nodo"] = os.environ.get("NODE_ROLE", "unknown")
-
-        if sync_service.push_to_replica(record):
-            result["replicado"] = True
-            print(f"  [SYNC] Receta {record['id']} replicada a nodo-replica")
 
         self._send_json(200, result)
 
@@ -115,17 +128,10 @@ class CompilerHandler(BaseHTTPRequestHandler):
     # Endpoint interno: POST /internal/sync
     # ------------------------------------------------------------------
     def _handle_trigger_sync(self):
-        sync_service.sync_replica()
-        self._send_json(200, {"status": "sync completado"})
+        self._send_json(200, {"status": "sincronizacion gestionada por la base de datos"})
 
     def do_GET(self):
-        if self.path == "/" or self.path == "":
-            self.send_response(200)
-            self.send_header("Content-Type", "text/plain")
-            self.end_headers()
-            self.wfile.write(b"POST /analyze | GET /internal/recipes | POST /internal/sync")
-        else:
-            self._route("GET")
+        self._route("GET")
 
     def do_POST(self):
         self._route("POST")
@@ -139,9 +145,6 @@ class CompilerHandler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
-
-    sync_service.start_auto_sync(interval=15)
-    sync_service.sync_replica()
 
     server = HTTPServer(("0.0.0.0", port), CompilerHandler)
     print(f"  Nodo: {os.environ.get('NODE_ROLE', 'unknown')}")

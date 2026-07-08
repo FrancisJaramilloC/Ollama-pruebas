@@ -40,4 +40,4 @@ class RecetasUser(HttpUser):
 
     @task(1)
     def health_check(self):
-        self.client.get("/")
+        self.client.get("/health")

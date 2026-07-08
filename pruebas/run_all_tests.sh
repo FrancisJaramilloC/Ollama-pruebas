@@ -1,7 +1,9 @@
 #!/bin/bash
 set -e
 
-RESULTADOS="resultados/$(date +%Y%m%d_%H%M%S)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+RESULTADOS="$REPO_ROOT/resultados/$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$RESULTADOS"
 echo "Resultados en: $RESULTADOS"
 
@@ -9,7 +11,7 @@ echo "Resultados en: $RESULTADOS"
 # 1. Verificar servicios
 # ==========================================
 echo "=== Verificando servicios ==="
-for svc in http://localhost:8080/ http://localhost:8001/ http://localhost:8002/; do
+for svc in http://localhost/ http://localhost:8001/health http://localhost:8002/health; do
   if curl -sf "$svc" > /dev/null 2>&1; then
     echo "  OK: $svc"
   else
@@ -46,7 +48,7 @@ echo '{"source": "incorporar 2 tazas de harina y mezclar 5 minutos"}' > /tmp/ab_
 ab -n 10 -c 2 \
   -p /tmp/ab_payload.json \
   -T "application/json" \
-  http://localhost:8080/analyze \
+  http://localhost/analyze \
   > "$RESULTADOS/ab_results.txt" 2>&1
 
 echo "Resultados:"
@@ -61,8 +63,8 @@ echo "PRUEBA 2: Locust"
 echo "========================================"
 
 if python3 -c "import locust" 2>/dev/null; then
-  locust -f locustfile.py \
-    --host=http://localhost:8080 \
+  locust -f "$SCRIPT_DIR/locustfile.py" \
+    --host=http://localhost \
     --headless \
     -u 3 \
     -r 1 \
@@ -90,8 +92,8 @@ echo "PRUEBA 3: JMeter"
 echo "========================================"
 
 if command -v jmeter &> /dev/null; then
-  if [ -f jmeter_test_plan.jmx ]; then
-    jmeter -n -t jmeter_test_plan.jmx \
+  if [ -f "$SCRIPT_DIR/jmeter_test_plan.jmx" ]; then
+    jmeter -n -t "$SCRIPT_DIR/jmeter_test_plan.jmx" \
       -l "$RESULTADOS/jmeter_results.csv" \
       -e -o "$RESULTADOS/jmeter_report/" \
       2>&1 | tee "$RESULTADOS/jmeter_output.txt"

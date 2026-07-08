@@ -1,82 +1,174 @@
+networks:
+  recipe-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.1.0/24
+
 volumes:
   mariadb-data-principal:
   mariadb-data-replica:
+  redis-data:
+  ollama-models:
 
 services:
-  mariadb-principal:
-    image: mariadb:latest
-    container_name: mariadb-principal
-    network_mode: host
+  mariadb-primary:
+    image: bitnami/mariadb:latest
+    container_name: mariadb-primary
     environment:
-      MYSQL_ROOT_PASSWORD: rootpass
-      MYSQL_DATABASE: recipes
-      MYSQL_TCP_PORT: 3307
+      MARIADB_ROOT_PASSWORD: rootpass
+      MARIADB_DATABASE: recipes
+      MARIADB_USER: recipes_app
+      MARIADB_PASSWORD: recipes_app_pass
+      MARIADB_REPLICATION_MODE: master
+      MARIADB_REPLICATION_USER: repl_user
+      MARIADB_REPLICATION_PASSWORD: repl_pass
     volumes:
-      - mariadb-data-principal:/var/lib/mysql
+      - mariadb-data-principal:/bitnami/mariadb
     healthcheck:
-      test: ["CMD", "mariadb-admin", "ping", "-h", "127.0.0.1", "-P", "3307"]
-      interval: 5s
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MARIADB_ROOT_PASSWORD"]
+      interval: 3s
       timeout: 3s
       retries: 20
+    networks:
+      recipe-net:
+        ipv4_address: 10.0.1.50
 
   mariadb-replica:
-    image: mariadb:latest
+    image: bitnami/mariadb:latest
     container_name: mariadb-replica
-    network_mode: host
     environment:
-      MYSQL_ROOT_PASSWORD: rootpass
-      MYSQL_DATABASE: recipes
-      MYSQL_TCP_PORT: 3308
+      MARIADB_ROOT_PASSWORD: rootpass
+      MARIADB_DATABASE: recipes
+      MARIADB_USER: recipes_app
+      MARIADB_PASSWORD: recipes_app_pass
+      MARIADB_REPLICATION_MODE: slave
+      MARIADB_REPLICATION_USER: repl_user
+      MARIADB_REPLICATION_PASSWORD: repl_pass
+      MARIADB_MASTER_HOST: mariadb-primary
+      MARIADB_MASTER_PORT_NUMBER: 3306
+      MARIADB_MASTER_ROOT_PASSWORD: rootpass
     volumes:
-      - mariadb-data-replica:/var/lib/mysql
+      - mariadb-data-replica:/bitnami/mariadb
+    depends_on:
+      mariadb-primary:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "mariadb-admin", "ping", "-h", "127.0.0.1", "-P", "3308"]
-      interval: 5s
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MARIADB_ROOT_PASSWORD"]
+      interval: 3s
       timeout: 3s
       retries: 20
+    networks:
+      recipe-net:
+        ipv4_address: 10.0.1.51
+
+  redis-cache:
+    image: redis:7-alpine
+    container_name: redis-cache
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    networks:
+      recipe-net:
+        ipv4_address: 10.0.1.60
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    volumes:
+      - ollama-models:/root/.ollama
+    environment:
+      OLLAMA_HOST: "0.0.0.0"
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list > /dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      recipe-net:
+        ipv4_address: 10.0.1.20
 
   nodo-principal:
     build: .
     container_name: nodo-principal
-    network_mode: host
     environment:
-      OLLAMA_HOST: "http://localhost:11434"
+      OLLAMA_HOST: "http://ollama:11434"
       NODE_ROLE: "main"
-      REPLICA_URL: "http://localhost:8002"
-      DB_HOST: "localhost"
-      DB_PORT: "3307"
-      DB_USER: "root"
-      DB_PASSWORD: "rootpass"
+      DB_WRITE_HOST: "mariadb-primary"
+      DB_WRITE_PORT: "3306"
+      DB_READ_HOST: "mariadb-replica"
+      DB_READ_PORT: "3306"
+      DB_USER: "recipes_app"
+      DB_PASSWORD: "recipes_app_pass"
       DB_NAME: "recipes"
-    command: ["python", "-m", "src.server", "8001"]
+      CACHE_URL: "redis://redis-cache:6379/0"
+    command: ["python", "-m", "src.server", "80"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:80/health', timeout=3)\""]
+      interval: 3s
+      timeout: 3s
+      retries: 20
     depends_on:
-      mariadb-principal:
+      mariadb-primary:
         condition: service_healthy
+      mariadb-replica:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    networks:
+      recipe-net:
+        ipv4_address: 10.0.1.10
 
   nodo-replica:
     build: .
     container_name: nodo-replica
-    network_mode: host
     environment:
-      OLLAMA_HOST: "http://localhost:11434"
+      OLLAMA_HOST: "http://ollama:11434"
       NODE_ROLE: "replica"
-      MAIN_URL: "http://localhost:8001"
-      DB_HOST: "localhost"
-      DB_PORT: "3308"
-      DB_USER: "root"
-      DB_PASSWORD: "rootpass"
+      DB_WRITE_HOST: "mariadb-primary"
+      DB_WRITE_PORT: "3306"
+      DB_READ_HOST: "mariadb-replica"
+      DB_READ_PORT: "3306"
+      DB_USER: "recipes_app"
+      DB_PASSWORD: "recipes_app_pass"
       DB_NAME: "recipes"
-    command: ["python", "-m", "src.server", "8002"]
+      CACHE_URL: "redis://redis-cache:6379/0"
+    command: ["python", "-m", "src.server", "80"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:80/health', timeout=3)\""]
+      interval: 3s
+      timeout: 3s
+      retries: 20
     depends_on:
+      mariadb-primary:
+        condition: service_healthy
       mariadb-replica:
         condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    networks:
+      recipe-net:
+        ipv4_address: 10.0.1.11
 
   balanceador:
     image: nginx:alpine
     container_name: balanceador
-    network_mode: host
+    ports:
+      - "8080:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - nodo-principal
       - nodo-replica
+    networks:
+      recipe-net:
+        ipv4_address: 10.0.1.100
