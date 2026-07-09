@@ -17,9 +17,6 @@ class LexicalService:
     def __init__(self, llm):
         self.llm = llm
 
-    # ------------------------------------------------------------------
-    # Prompt para el LLM (clasifica un unico bloque UNKNOWN)
-    # ------------------------------------------------------------------
     def _build_prompt(self, block_text: str) -> str:
         return f"""
 Eres un clasificador lexico especializado en recetas de cocina.
@@ -35,7 +32,7 @@ Tokens disponibles:
 Instrucciones:
 1. Identifica dentro del fragmento las palabras o frases que coincidan con los tokens.
 2. Asigna UNICAMENTE los tokens listados.
-3. Si hay multiples clasificaciones, inclu yelas todas.
+3. Si hay multiples clasificaciones, incluyelas todas.
 4. Omite texto que no coincida con ningun token, siempre y cuando no interfiera con el análisis.
 
 Responde UNICAMENTE con un JSON plano donde cada clave sea el texto clasificado y cada valor sea el token.
@@ -46,9 +43,6 @@ No uses markdown.
 No agregues comentarios ni texto adicional. 
 Utiliza un lenguaje claro, sencillo y facil de entender. """
 
-    # ------------------------------------------------------------------
-    # Validacion de clasificaciones del LLM
-    # ------------------------------------------------------------------
     @staticmethod
     def _validate_classifications(
         classifications: dict, block_text: str
@@ -95,9 +89,6 @@ Utiliza un lenguaje claro, sencillo y facil de entender. """
 
         return valid
 
-    # ------------------------------------------------------------------
-    # Tarea del AFD (clasifica tokens duros: NUMERO, CONECTOR_Y)
-    # ------------------------------------------------------------------
     @staticmethod
     def _afd_task(hard_tokens: list) -> list:
         thread_name = threading.current_thread().name
@@ -115,9 +106,6 @@ Utiliza un lenguaje claro, sencillo y facil de entender. """
         )
         return result
 
-    # ------------------------------------------------------------------
-    # Tarea del LLM (clasifica un bloque UNKNOWN)
-    # ------------------------------------------------------------------
     def _llm_task(self, block_text: str, idx: int) -> dict:
         thread_name = threading.current_thread().name
         start = time.time()
@@ -144,29 +132,16 @@ Utiliza un lenguaje claro, sencillo y facil de entender. """
             f"  [LLM] '{thread_name}' clasifico bloque {idx} "
             f"('{block_text[:30]}...') en {elapsed_ms:.2f}ms"
         )
-        if validated != classifications:
-            print(
-                f"    -> clasificaciones invalidas filtradas: "
-                f"{ {k: classifications[k] for k in set(classifications) - set(validated)} }"
-            )
         return {
             "idx": idx,
             "text": block_text,
             "classifications": validated
         }
 
-    # ------------------------------------------------------------------
-    # Metodo principal
-    # ------------------------------------------------------------------
     def analyze(self, source: str) -> list:
         start_total = time.time()
-        print(f"\n  {'='*55}")
-        print(f"  FASE 1 — ANALISIS LEXICO CONCURRENTE")
-        print(f"  {'='*55}")
 
-        # ----------------------------------------------------------
-        # 1. Tokenizacion inicial con el AFD (expresiones regulares)
-        # ----------------------------------------------------------
+        # 1. Tokenizacion inicial con el AFD
         pattern = "|".join(
             f"(?P<{name}>{regex})"
             for name, regex in self.TOKEN_PATTERNS
@@ -180,9 +155,7 @@ Utiliza un lenguaje claro, sencillo y facil de entender. """
                 continue
             raw_tokens.append({"type": ttype, "value": tvalue})
 
-        # ----------------------------------------------------------
-        # 2. Separar tokens duros (AFD) y agrupar bloques UNKNOWN
-        # ----------------------------------------------------------
+        # 2. Separar tokens duros y bloques UNKNOWN
         hard_tokens = [t for t in raw_tokens if t["type"] != "UNKNOWN"]
 
         unknown_blocks = []
@@ -201,13 +174,7 @@ Utiliza un lenguaje claro, sencillo y facil de entender. """
             for block in unknown_blocks
         ]
 
-        print(f"\n  Tokens duros (AFD): {[t['value'] for t in hard_tokens]}")
-        print(f"  Bloques UNKNOWN  : {blocks_text}")
-        print()
-
-        # ----------------------------------------------------------
         # 3. Ejecucion concurrente con ThreadPoolExecutor
-        # ----------------------------------------------------------
         num_llm_calls = len(blocks_text)
         max_workers = max(2, num_llm_calls + 1)
 
@@ -231,9 +198,7 @@ Utiliza un lenguaje claro, sencillo y facil de entender. """
                 idx = llm_futures[future]
                 results["soft"][idx] = future.result()
 
-        # ----------------------------------------------------------
         # 4. Unificar resultados preservando el orden original
-        # ----------------------------------------------------------
         final_tokens = []
         bidx = 0
         i = 0
@@ -285,7 +250,7 @@ Utiliza un lenguaje claro, sencillo y facil de entender. """
                                     ))
                             final_tokens.append(_make_token(
                                 tok_type, fragment, "LLM"
-                            ))
+                              ))
                             pos = idx_f + len(fragment)
                         remaining = block_text[pos:].strip()
                         if remaining:
@@ -305,10 +270,5 @@ Utiliza un lenguaje claro, sencillo y facil de entender. """
 
                 i += len(block_tokens)
                 bidx += 1
-
-        elapsed_total = (time.time() - start_total) * 1000
-        print(
-            f"\n  Tiempo total del analisis lexico: {elapsed_total:.2f}ms"
-        )
 
         return final_tokens

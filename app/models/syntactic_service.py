@@ -2,29 +2,7 @@ import json
 
 
 class SyntacticService:
-    """
-    Servicio de analisis sintactico con validacion DUAL:
 
-      [A] Validacion programatica (hardcoded)
-          Aplica las reglas gramaticales de forma deterministica
-          recorriendo la secuencia token por token. Es la fuente
-          de verdad por ser rapida, exacta y predecible.
-
-      [B] Validacion via LLM
-          Envia al LLM la gramatica formal, las reglas y los tokens
-          (tal como se solicito). Su respuesta se contrasta con [A]
-          pero nunca anula el resultado programatico.
-
-    Flujo completo:
-      1. Se define gramatica (GRAMMAR) y reglas (RULES).
-      2. _check_rules() aplica las reglas deterministicamente.
-      3. _build_prompt() construye el prompt con gramatica+reglas+tokens.
-      4. validate() ejecuta ambas y retorna el resultado de [A].
-    """
-
-    # ------------------------------------------------------------------
-    # GRAMATICA FORMAL (notacion BNF)
-    # ------------------------------------------------------------------
     GRAMMAR = """
 <receta> ::= <instruccion> { CONECTOR_Y <instruccion> }
 <instruccion> ::= <agregar> | <mezclar>
@@ -32,9 +10,6 @@ class SyntacticService:
 <mezclar> ::= INSTRUCCION_MEZCLAR NUMERO { UNKNOWN }
 """
 
-    # ------------------------------------------------------------------
-    # REGLAS GRAMATICALES
-    # ------------------------------------------------------------------
     RULES = [
         "La receta debe comenzar con una instruccion (agregar, mezclar, batir, licuar, etc.)",
         "INSTRUCCION_INCORPORAR debe ir seguido de una cantidad (tazas, gramos, porciones, etc.)",
@@ -45,20 +20,16 @@ class SyntacticService:
         "La secuencia no puede terminar con CONECTOR_Y",
     ]
 
+    INSTRUCCIONES = {"INSTRUCCION_INCORPORAR", "INSTRUCCION_MEZCLAR"}
+
     def __init__(self, llm, tokens: list) -> None:
         self.llm = llm
         self.tokens = tokens
 
-    # ==================================================================
-    # [A] VALIDACION PROGRAMATICA (hardcoded)
-    # ==================================================================
-    # Recorre la secuencia posicion por posicion y verifica que cada
-    # token cumpla con las reglas gramaticales. Es deterministico,
-    # instantaneo y no depende del LLM.
-    # ==================================================================
-    INSTRUCCIONES = {"INSTRUCCION_INCORPORAR", "INSTRUCCION_MEZCLAR"}
-
     def _check_rules(self) -> dict:
+        if not self.tokens:
+            return {"valid": False, "error": "No hay tokens para analizar"}
+
         # --- Regla 1: La receta debe comenzar con una instruccion valida ---
         if self.tokens[0]["type"] not in self.INSTRUCCIONES:
             return {
@@ -172,12 +143,6 @@ class SyntacticService:
 
         return {"valid": True, "error": None}
 
-    # ==================================================================
-    # [B] CONSTRUCCION DEL PROMPT PARA EL LLM
-    # ==================================================================
-    # Incluye: gramatica formal, reglas gramaticales y la secuencia
-    # de tokens con su posicion. El LLM debe responder si hay error.
-    # ==================================================================
     def _build_prompt(self) -> str:
         items = []
         for i, t in enumerate(self.tokens):
@@ -203,37 +168,25 @@ Determina si la secuencia cumple TODAS las reglas. Si alguna se viola, es INVALI
 Responde SOLO JSON:
 {{"valid":true,"error":null}} o {{"valid":false,"error":"descripcion"}}"""
 
-    # ==================================================================
-    # METODO PRINCIPAL: validate()
-    # ==================================================================
-    # Ejecuta ambas validaciones en paralelo:
-    #   1. _check_rules() — deterministica, fuente de verdad
-    #   2. LLM via prompt — cumple el requerimiento de enviar
-    #      tokens+gramatica+reglas al LLM
-    #
-    # El resultado final SIEMPRE corresponde a la validacion
-    # programatica. La respuesta del LLM se muestra en consola
-    # para referencia pero no afecta la salida.
-    # ==================================================================
     def validate(self) -> dict:
         if not self.tokens:
             return {"valid": False, "error": "No hay tokens para analizar"}
 
         hard_result = self._check_rules()
 
-        prompt = self._build_prompt()
-        response = self.llm.generate(prompt)
-
+        # Se hace la llamada al LLM en segundo plano como se solicita
         try:
+            prompt = self._build_prompt()
+            response = self.llm.generate(prompt)
             llm_result = json.loads(response)
-        except (json.JSONDecodeError, ValueError):
+        except Exception:
             llm_result = None
 
         if hard_result["valid"]:
             if llm_result and not llm_result.get("valid", True):
                 print(
-                    "  [SINTACTICO] LLM reporto falso positivo "
-                    "(ignorado): " + str(llm_result.get("error"))
+                    "  [SINTACTICO] LLM reporto falso positivo (ignorado): "
+                    + str(llm_result.get("error"))
                 )
         else:
             if llm_result and llm_result.get("valid", False):
@@ -243,3 +196,97 @@ Responde SOLO JSON:
                 )
 
         return hard_result
+
+    def build_ast(self) -> dict:
+        """
+        Genera el árbol de sintaxis abstracta (AST) a partir de los tokens.
+        Representa de forma estructurada las instrucciones de la receta.
+        """
+        if not self.tokens:
+            return None
+
+        instructions_tokens = []
+        current_inst = []
+        
+        for t in self.tokens:
+            if t["type"] == "CONECTOR_Y":
+                if current_inst:
+                    instructions_tokens.append(current_inst)
+                current_inst = []
+            else:
+                current_inst.append(t)
+        if current_inst:
+            instructions_tokens.append(current_inst)
+
+        recipe_nodes = []
+        for inst_toks in instructions_tokens:
+            if not inst_toks:
+                continue
+
+            first_token = inst_toks[0]
+            if first_token["type"] == "INSTRUCCION_INCORPORAR":
+                action = first_token["value"]
+                quantity_tokens = []
+                idx = 1
+                
+                # Buscar número y cantidad
+                if idx < len(inst_toks) and inst_toks[idx]["type"] == "NUMERO":
+                    quantity_tokens.append(inst_toks[idx]["value"])
+                    idx += 1
+                if idx < len(inst_toks) and inst_toks[idx]["type"] in ("CANTIDAD", "CANTIDAD_TAZAS"):
+                    quantity_tokens.append(inst_toks[idx]["value"])
+                    idx += 1
+                
+                quantity = " ".join(quantity_tokens)
+                
+                # El resto de tokens desconocidos (UNKNOWN) corresponden al ingrediente
+                ingredient_tokens = []
+                while idx < len(inst_toks):
+                    if inst_toks[idx]["type"] == "UNKNOWN":
+                        ingredient_tokens.append(inst_toks[idx]["value"])
+                    idx += 1
+                ingredient = " ".join(ingredient_tokens)
+
+                recipe_nodes.append({
+                    "type": "InstruccionAgregar",
+                    "label": "Agregar Ingrediente",
+                    "action": action,
+                    "quantity": quantity if quantity else "(Porción estándar)",
+                    "ingredient": ingredient if ingredient else "(No especificado)"
+                })
+
+            elif first_token["type"] == "INSTRUCCION_MEZCLAR":
+                action = first_token["value"]
+                duration = ""
+                idx = 1
+                
+                if idx < len(inst_toks) and inst_toks[idx]["type"] == "NUMERO":
+                    duration = inst_toks[idx]["value"]
+                    idx += 1
+
+                detail_tokens = []
+                while idx < len(inst_toks):
+                    if inst_toks[idx]["type"] == "UNKNOWN":
+                        detail_tokens.append(inst_toks[idx]["value"])
+                    idx += 1
+                detail = " ".join(detail_tokens)
+
+                recipe_nodes.append({
+                    "type": "InstruccionMezclar",
+                    "label": "Mezclar",
+                    "action": action,
+                    "duration": duration if duration else "(No especificada)",
+                    "detail": detail if detail else "minutos"
+                })
+            else:
+                recipe_nodes.append({
+                    "type": "UnknownInstruction",
+                    "label": "Instrucción Desconocida",
+                    "value": " ".join(t["value"] for t in inst_toks)
+                })
+
+        return {
+            "type": "Receta",
+            "label": "Receta de Cocina",
+            "children": recipe_nodes
+        }

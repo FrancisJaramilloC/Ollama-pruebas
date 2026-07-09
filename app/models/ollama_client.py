@@ -1,8 +1,6 @@
 import requests
 
-
 class OllamaClient:
-
     def __init__(
         self,
         model: str = "llama3.2:3b",

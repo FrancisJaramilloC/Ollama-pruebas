@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compilador de Recetas DSL - Arquitectura MVC</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="glass-bg-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <header class="app-header">
+        <div class="logo-area">
+            <span class="logo-icon">🍳</span>
+            <div class="logo-text">
+                <h1>ChefCompiler</h1>
+                <p>Compilador DSL de Recetas con Validación Semántica en Java & MVC</p>
+            </div>
+        </div>
+        <div class="header-tags">
+            <span class="badge badge-python">Python (Flask)</span>
+            <span class="badge badge-java">Java 21</span>
+            <span class="badge badge-llm">LLM (Ollama)</span>
+        </div>
+    </header>
+
+    <main class="dashboard">
+        <!-- Panel Izquierdo: Entrada de Receta -->
+        <section class="panel input-panel">
+            <div class="panel-header">
+                <h2>📥 Entrada de Código Fuente</h2>
+                <p>Escribe tu receta utilizando la gramática del compilador</p>
+            </div>
+            
+            <div class="panel-body">
+                <div class="preset-buttons">
+                    <button class="btn-preset" data-code="agregar un par de tazas de harina y mezclar por 5 minutos">✅ Receta Válida</button>
+                    <button class="btn-preset" data-code="mezclar por 10 minutos y agregar una taza de harina">❌ Error: Mezclar al inicio</button>
+                    <button class="btn-preset" data-code="agregar 150 gramos de chocolate y mezclar por 140 minutos">❌ Error: Tiempo inválido</button>
+                    <button class="btn-preset" data-code="agregar una taza de harina y agregar una taza de harina y mezclar por 10 minutos">⚠️ Warning: Ingrediente duplicado</button>
+                    <button class="btn-preset" data-code="agregar una taza de y mezclar por 5 minutos">❌ Error: Falta ingrediente</button>
+                </div>
+
+                <div class="editor-container">
+                    <textarea id="recipe-input" placeholder="Escribe tu receta aquí... Ejemplo: agregar un par de tazas de harina y mezclar por 5 minutos" spellcheck="false"></textarea>
+                    <div class="editor-footer">
+                        <span id="char-counter">0 caracteres</span>
+                        <button id="btn-compile" class="btn-primary">
+                            <span>Compilar Receta</span>
+                            <span class="btn-icon">⚡</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gramática DSL de Referencia -->
+            <div class="grammar-reference">
+                <h3>📜 Reglas Gramaticales & BNF</h3>
+                <div class="grammar-box">
+                    <pre><code>&lt;receta&gt;      ::= &lt;instruccion&gt; { CONECTOR_Y &lt;instruccion&gt; }
+&lt;instruccion&gt; ::= &lt;agregar&gt; | &lt;mezclar&gt;
+&lt;agregar&gt;     ::= INSTRUCCION_INCORPORAR ( CANTIDAD | NUMERO CANTIDAD ) { UNKNOWN }
+&lt;mezclar&gt;     ::= INSTRUCCION_MEZCLAR NUMERO { UNKNOWN }</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- Panel Derecho: Resultados del Compilador -->
+        <section class="panel output-panel">
+            <div class="panel-header">
+                <h2>📤 Resultados del Análisis</h2>
+                <p>Monitorea las fases del compilador en tiempo real</p>
+            </div>
+
+            <div class="panel-body">
+                <!-- Estado Inicial / Cargando -->
+                <div id="placeholder-result" class="result-placeholder">
+                    <div class="placeholder-icon">🔍</div>
+                    <h3>Esperando Compilación</h3>
+                    <p>Ingresa una receta o selecciona un ejemplo en el panel de la izquierda y presiona "Compilar Receta" para iniciar el análisis.</p>
+                </div>
+
+                <div id="loader" class="loader-container hidden">
+                    <div class="spinner"></div>
+                    <p>Procesando Análisis Léxico Concurrente (AFD + LLM) & Validación en Java...</p>
+                </div>
+
+                <!-- Contenido de los Resultados -->
+                <div id="compilation-results" class="results-content hidden">
+                    
+                    <!-- FASE 1: LÉXICO -->
+                    <div class="result-card card-lexical">
+                        <div class="card-title">
+                            <span class="step-num">Fase 1</span>
+                            <h3>Análisis Léxico Concurrente</h3>
+                            <span class="origin-legend"><span class="legend-afd">AFD</span> / <span class="legend-llm">LLM</span></span>
+                        </div>
+                        <div class="card-body">
+                            <div id="token-list" class="token-container">
+                                <!-- Los tokens se inyectarán aquí -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- FASE 2: SINTÁCTICO -->
+                    <div class="result-card card-syntactic" id="card-sintaxis">
+                        <div class="card-title">
+                            <span class="step-num">Fase 2</span>
+                            <h3>Análisis Sintáctico (Gramática BNF)</h3>
+                            <span id="syntax-status-badge" class="badge-status">Pendiente</span>
+                        </div>
+                        <div class="card-body">
+                            <div id="syntax-details" class="status-msg-box">
+                                <!-- Detalles de sintaxis se inyectarán aquí -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- FASE 3: SEMÁNTICO (JAVA) -->
+                    <div class="result-card card-semantic" id="card-semantica">
+                        <div class="card-title">
+                            <span class="step-num">Fase 3</span>
+                            <h3>Análisis Semántico (Java 21)</h3>
+                            <span id="semantic-status-badge" class="badge-status">Pendiente</span>
+                        </div>
+                        <div class="card-body">
+                            <div id="semantic-details" class="status-msg-box">
+                                <!-- Detalles semánticos -->
+                            </div>
+                            
+                            <div id="detected-ingredients-container" class="ingredients-list hidden">
+                                <h4>🍎 Ingredientes Identificados:</h4>
+                                <div id="ingredients-tags" class="tags-container"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- FASE 4: ÁRBOL DE SINTAXIS (AST) -->
+                    <div class="result-card card-ast">
+                        <div class="card-title">
+                            <span class="step-num">Árbol</span>
+                            <h3>Visualización del Árbol de Sintaxis (AST)</h3>
+                        </div>
+                        <div class="card-body ast-body">
+                            <p class="section-desc">Representación jerárquica generada a partir del análisis sintáctico:</p>
+                            <div class="ast-wrapper">
+                                <div id="ast-tree" class="tree">
+                                    <!-- El árbol visual se dibujará aquí -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="app-footer">
+        <p>&copy; 2026 ChefCompiler. Desarrollado bajo Arquitectura MVC limpia con Python Flask y validador de tipos en Java.</p>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
