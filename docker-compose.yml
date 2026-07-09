@@ -159,6 +159,23 @@ services:
       recipe-net:
         ipv4_address: 10.0.1.11
 
+  frontend:
+    build:
+      context: ./frontend
+    container_name: frontend
+    ports:
+      - "5000:5000"
+    environment:
+      BALANCEADOR_URL: "http://balanceador:80"
+      NODO_PRINCIPAL_URL: "http://nodo-principal:80"
+      NODO_REPLICA_URL: "http://nodo-replica:80"
+      FRONTEND_PORT: "5000"
+    depends_on:
+      - balanceador
+    networks:
+      recipe-net:
+        ipv4_address: 10.0.1.200
+
   balanceador:
     image: nginx:alpine
     container_name: balanceador

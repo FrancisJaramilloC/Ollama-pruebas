@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analizador Sintáctico Distribuido</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: #f5efe6; color: #2c1810; min-height: 100vh;
+  }
+  .container { max-width: 1100px; margin: 0 auto; padding: 1.5rem 1rem; }
+
+  /* header */
+  header {
+    background: linear-gradient(135deg, #8b5e3c 0%, #6b3a1f 100%);
+    color: #fff; padding: 1.5rem 0; border-radius: 0 0 20px 20px;
+    box-shadow: 0 4px 12px rgba(0,0,0,.15);
+  }
+  header h1 { font-weight: 600; font-size: 1.5rem; }
+  header p { opacity: .85; font-size: .9rem; margin-top: .25rem; }
+
+  /* cards */
+  .grid { display: grid; gap: 1rem; margin-top: 1.5rem; }
+  .card {
+    background: #fff; border-radius: 16px; padding: 1.25rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,.06); border: 1px solid #e8ddd0;
+  }
+  .card h2 { font-size: 1.05rem; color: #5a3a28; margin-bottom: .75rem;
+              display: flex; align-items: center; gap: .5rem; }
+
+  /* nodes */
+  .nodes { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+  .node {
+    border-radius: 12px; padding: 1rem; text-align: center;
+    border: 2px solid #e8ddd0;
+  }
+  .node.healthy { border-color: #4caf50; background: #f1f8e9; }
+  .node.down    { border-color: #e53935; background: #fbe9e7; }
+  .node.error   { border-color: #ff9800; background: #fff8e1; }
+  .node .dot {
+    display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+    margin-right: 6px;
+  }
+  .node.healthy .dot { background: #4caf50; }
+  .node.down .dot    { background: #e53935; }
+  .node .name { font-weight: 600; font-size: 1rem; }
+  .node .role { font-size: .8rem; color: #666; margin-top: 2px; }
+
+  /* textarea */
+  textarea {
+    width: 100%; border: 2px solid #d7ccc8; border-radius: 10px;
+    padding: .75rem; font-family: 'JetBrains Mono', 'Cascadia Code', monospace;
+    font-size: .9rem; resize: vertical; min-height: 80px;
+    background: #faf7f2; color: #2c1810; transition: border-color .2s;
+  }
+  textarea:focus { outline: none; border-color: #8b5e3c; }
+
+  button {
+    background: #8b5e3c; color: #fff; border: none; border-radius: 10px;
+    padding: .7rem 1.5rem; font-size: .95rem; font-weight: 500;
+    cursor: pointer; transition: background .2s, transform .1s;
+  }
+  button:hover { background: #6b3a1f; }
+  button:active { transform: scale(.97); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+
+  .input-row { display: flex; gap: .75rem; align-items: flex-start; margin-top: .5rem; }
+  .input-row textarea { flex: 1; }
+  .input-row button { white-space: nowrap; margin-top: 0; }
+
+  /* result */
+  #result { display: none; }
+  #result.show { display: block; }
+  pre {
+    background: #2c1810; color: #e8ddd0; padding: .75rem; border-radius: 10px;
+    overflow-x: auto; font-size: .82rem; line-height: 1.5; margin-top: .5rem;
+  }
+
+  /* log */
+  .log-empty { color: #999; font-style: italic; text-align: center; padding: 1rem; }
+  .log-table {
+    width: 100%; border-collapse: collapse; font-size: .85rem;
+  }
+  .log-table th {
+    text-align: left; padding: .5rem .4rem; border-bottom: 2px solid #e8ddd0;
+    color: #5a3a28; font-weight: 600;
+  }
+  .log-table td {
+    padding: .5rem .4rem; border-bottom: 1px solid #f0ebe4; vertical-align: top;
+  }
+  .log-table tr:hover td { background: #faf7f2; }
+  .badge {
+    display: inline-block; padding: .15rem .5rem; border-radius: 20px;
+    font-size: .75rem; font-weight: 500;
+  }
+  .badge.ok { background: #e8f5e9; color: #2e7d32; }
+  .badge.error { background: #fbe9e7; color: #c62828; }
+  .badge.main { background: #e3f2fd; color: #1565c0; }
+  .badge.replica { background: #fce4ec; color: #c62828; }
+  .src-cell { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  @media (max-width: 700px) {
+    .nodes { grid-template-columns: 1fr; }
+    .input-row { flex-direction: column; }
+    .input-row button { width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="container">
+    <h1>Analizador Sintáctico Distribuido</h1>
+    <p>Arquitectura: NGINX → Nodos App → MariaDB (Primary/Replica) + Redis + Ollama</p>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Nodos -->
+  <div class="grid">
+    <div class="card">
+      <h2>Servidores Activos</h2>
+      <div class="nodes" id="nodes">
+        <div class="node"><div class="dot"></div><div class="name">cargando…</div></div>
+        <div class="node"><div class="dot"></div><div class="name">cargando…</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Analizar -->
+  <div class="grid">
+    <div class="card">
+      <h2>Analizar código fuente</h2>
+      <p style="font-size:.85rem;color:#777;margin-bottom:.5rem;">
+        Ingresa una receta o fragmento de código y presiona Analizar.
+      </p>
+      <div class="input-row">
+        <textarea id="source" placeholder="Ej: int a = 5;  o  agregar una taza de harina"></textarea>
+        <button id="btn-analyze" onclick="analyze()">Analizar</button>
+      </div>
+      <div id="result">
+        <pre id="result-json"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Historial -->
+  <div class="grid">
+    <div class="card">
+      <h2>Historial de solicitudes</h2>
+      <div id="log-container">
+        <div class="log-empty">Aún no hay solicitudes.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const BALANCEADOR = "/api";
+
+  // -----------------------------------------------------------------------
+  // Nodos
+  // -----------------------------------------------------------------------
+  async function refreshNodes() {
+    try {
+      const r = await fetch(`${BALANCEADOR}/health`);
+      const data = await r.json();
+      const container = document.getElementById("nodes");
+      container.innerHTML = data.nodes.map(n => `
+        <div class="node ${n.status}">
+          <div><span class="dot"></span><span class="name">${n.name}</span></div>
+          <div class="role">${n.status === "healthy" ? "Rol: " + n.role : n.role}</div>
+        </div>
+      `).join("");
+    } catch { /* keep previous */ }
+  }
+
+  // -----------------------------------------------------------------------
+  // Analizar
+  // -----------------------------------------------------------------------
+  async function analyze() {
+    const source = document.getElementById("source").value.trim();
+    if (!source) return;
+
+    const btn = document.getElementById("btn-analyze");
+    const resultDiv = document.getElementById("result");
+    const resultJson = document.getElementById("result-json");
+
+    btn.disabled = true;
+    btn.textContent = "Analizando…";
+    resultDiv.classList.remove("show");
+
+    try {
+      const r = await fetch(`${BALANCEADOR}/analyze`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source }),
+      });
+      const data = await r.json();
+      resultJson.textContent = JSON.stringify(data, null, 2);
+      resultDiv.classList.add("show");
+    } catch (err) {
+      resultJson.textContent = "Error: " + err.message;
+      resultDiv.classList.add("show");
+    }
+
+    btn.disabled = false;
+    btn.textContent = "Analizar";
+    refreshHistory();
+    refreshNodes();
+  }
+
+  // -----------------------------------------------------------------------
+  // Historial
+  // -----------------------------------------------------------------------
+  async function refreshHistory() {
+    try {
+      const r = await fetch(`${BALANCEADOR}/history`);
+      const data = await r.json();
+      const container = document.getElementById("log-container");
+
+      if (!data.length) {
+        container.innerHTML = `<div class="log-empty">Aún no hay solicitudes.</div>`;
+        return;
+      }
+
+      let html = `<table class="log-table">
+        <thead><tr>
+          <th>Hora</th><th>Fuente</th><th>Nodo</th><th>Estado</th><th>Detalle</th>
+        </tr></thead><tbody>`;
+
+      for (const entry of data) {
+        const statusClass = entry.status === "ok" ? "ok" : "error";
+        const nodeClass = entry.node === "main" ? "main" : (entry.node === "replica" ? "replica" : "");
+        const sintaxis = entry.sintaxis || {};
+        const detail = sintaxis.valid ? "Válido" : (sintaxis.error || entry.detail || "—");
+        html += `<tr>
+          <td>${entry.time}</td>
+          <td class="src-cell" title="${escHtml(entry.source)}">${escHtml(truncate(entry.source, 40))}</td>
+          <td>${nodeClass ? `<span class="badge ${nodeClass}">${entry.node}</span>` : "—"}</td>
+          <td><span class="badge ${statusClass}">${entry.status}</span></td>
+          <td style="font-size:.8rem">${escHtml(truncate(detail, 60))}</td>
+        </tr>`;
+      }
+
+      html += "</tbody></table>";
+      container.innerHTML = html;
+    } catch { /* ignore */ }
+  }
+
+  function truncate(s, n) { return s && s.length > n ? s.slice(0, n) + "…" : s; }
+  function escHtml(s) {
+    if (!s) return "";
+    return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;").replace(/'/g,"&#039;");
+  }
+
+  // -----------------------------------------------------------------------
+  // Inicio
+  // -----------------------------------------------------------------------
+  refreshNodes();
+  refreshHistory();
+  setInterval(refreshNodes, 5000);
+  setInterval(refreshHistory, 3000);
+
+  document.addEventListener("keydown", e => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) analyze();
+  });
+</script>
+
+</body>
+</html>

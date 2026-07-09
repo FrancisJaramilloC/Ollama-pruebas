@@ -26,7 +26,11 @@ class CompilerHandler(BaseHTTPRequestHandler):
             self._handle_health()
             return
         elif method == "GET" and path == "":
-            self._handle_root()
+            self._send_json(200, {
+                "service": "analyzer",
+                "version": "1.0",
+                "status": "ok"
+            })
             return
         if method == "POST" and path == "/analyze":
             self._handle_analyze()
@@ -48,12 +52,6 @@ class CompilerHandler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------
     def _handle_health(self):
         self._send_json(200, {"status": "ok", "node": os.environ.get("NODE_ROLE", "unknown")})
-
-    def _handle_root(self):
-        self.send_response(200)
-        self.send_header("Content-Type", "text/plain")
-        self.end_headers()
-        self.wfile.write(b"OK")
 
     def _handle_analyze(self):
         content_length = int(self.headers.get("Content-Length", 0))
