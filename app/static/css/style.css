@@ -749,3 +749,60 @@ body {
 .hidden {
     display: none !important;
 }
+
+/* --- LLM ERROR INTERPRETATION --- */
+.card-llm-errors {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.05), rgba(139, 92, 246, 0.05));
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    animation: fadeIn 0.4s ease;
+}
+
+.card-llm-errors:hover {
+    border-color: rgba(239, 68, 68, 0.4);
+}
+
+.warning-llm {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.15);
+    color: #fecaca;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    border-radius: 12px;
+    padding: 1.2rem;
+}
+
+.warning-llm p {
+    margin-bottom: 0.75rem;
+}
+
+.warning-llm p:last-child {
+    margin-bottom: 0;
+}
+
+.warning-llm ul, .warning-llm ol {
+    margin-left: 1.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.warning-llm li {
+    margin-bottom: 0.4rem;
+}
+
+.warning-llm strong {
+    color: #fca5a5;
+}
+
+.warning-llm code {
+    background: rgba(0, 0, 0, 0.4);
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    font-family: monospace;
+    color: #fca5a5;
+    font-size: 0.85rem;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+

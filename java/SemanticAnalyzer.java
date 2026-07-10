@@ -3,9 +3,15 @@ import java.io.InputStreamReader;
 import java.util.*;
 import java.util.regex.*;
 
+/**
+ * Clase principal que realiza el análisis semántico de una secuencia de tokens
+ * que representan instrucciones de una receta (ej. agregar ingredientes, mezclar).
+ * Evalúa reglas de negocio específicas para asegurar que la receta sea coherente.
+ */
 public class SemanticAnalyzer {
 
     public static void main(String[] args) {
+        // Almacena la entrada estándar en formato JSON que contiene los tokens generados por el analizador léxico.
         StringBuilder jsonInput = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in, "UTF-8"))) {
             String line;
@@ -17,29 +23,36 @@ public class SemanticAnalyzer {
             return;
         }
 
+        // Convierte el JSON de entrada en una lista estructurada de tokens (representados como Mapas clave-valor).
         List<Map<String, String>> tokens = parseTokensJson(jsonInput.toString());
         
+        // Bandera para rastrear si se ha incorporado algún ingrediente antes de intentar mezclar.
         boolean hasAddedAny = false;
+        // Colecciones para registrar los resultados del análisis semántico.
         List<String> errors = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         List<String> ingredients = new ArrayList<>();
 
+        // Recorre todos los tokens secuencialmente para aplicar las reglas de validación semántica.
         for (int i = 0; i < tokens.size(); i++) {
             Map<String, String> token = tokens.get(i);
             String type = token.get("type");
             String value = token.get("value");
             
+            // Regla 1: Validar instrucciones de mezclado/batido.
             if ("INSTRUCCION_MEZCLAR".equals(type)) {
+                // No se puede mezclar si no se ha agregado al menos un ingrediente previamente.
                 if (!hasAddedAny) {
                     errors.add("Error Semántico: Se intenta mezclar/batir sin haber agregado ningún ingrediente primero.");
                 }
                 
-                // Buscar el número de tiempo de mezclado que sigue
+                // Validar que el tiempo de mezclado sea lógico (debe estar expresado por el token NUMERO siguiente).
                 if (i + 1 < tokens.size()) {
                     Map<String, String> nextToken = tokens.get(i + 1);
                     if ("NUMERO".equals(nextToken.get("type"))) {
                         try {
                             int minutes = Integer.parseInt(nextToken.get("value"));
+                            // El tiempo de mezclado debe estar en un rango razonable (1 a 120 minutos).
                             if (minutes <= 0 || minutes > 120) {
                                 errors.add("Error Semántico: El tiempo de mezclado de " + minutes + " minutos no es válido. Debe ser entre 1 y 120 minutos.");
                             }
@@ -48,23 +61,27 @@ public class SemanticAnalyzer {
                         }
                     }
                 }
+            // Regla 2: Validar instrucciones de agregar/incorporar ingredientes.
             } else if ("INSTRUCCION_INCORPORAR".equals(type)) {
+                // Marcamos que ya se ha agregado al menos un ingrediente.
                 hasAddedAny = true;
                 
-                // Encontrar el ingrediente (reunir todos los tokens UNKNOWN después de la cantidad)
+                // Reconstruir el nombre del ingrediente acumulando los tokens UNKNOWN consecutivos
+                // que aparecen después del verbo de incorporación.
                 StringBuilder ingredientBuilder = new StringBuilder();
                 int j = i + 1;
                 while (j < tokens.size()) {
                     Map<String, String> nextToken = tokens.get(j);
                     String nextType = nextToken.get("type");
                     
-                    // Si encontramos un conector u otra instrucción, paramos
+                    // Detener la reconstrucción si encontramos un conector u otra instrucción principal.
                     if ("CONECTOR_Y".equals(nextType) || 
                         "INSTRUCCION_INCORPORAR".equals(nextType) || 
                         "INSTRUCCION_MEZCLAR".equals(nextType)) {
                         break;
                     }
                     
+                    // Acumulamos el valor del token si es de tipo UNKNOWN (usualmente partes del nombre del ingrediente).
                     if ("UNKNOWN".equals(nextType)) {
                         if (ingredientBuilder.length() > 0) {
                             ingredientBuilder.append(" ");
@@ -76,9 +93,11 @@ public class SemanticAnalyzer {
                 
                 String ingredient = ingredientBuilder.toString().trim();
                 if (ingredient.isEmpty()) {
+                    // Es un error si la instrucción de incorporar no tiene un ingrediente asociado.
                     errors.add("Error Semántico: La instrucción de agregar '" + value + "' no especifica qué ingrediente se está agregando (se esperaba un ingrediente, ej. 'harina').");
                 } else {
                     String normalized = ingredient.toLowerCase();
+                    // Emitir una advertencia si el ingrediente ya ha sido agregado antes en la receta.
                     if (ingredients.contains(normalized)) {
                         warnings.add("Advertencia Semántica: El ingrediente '" + ingredient + "' ha sido agregado más de una vez.");
                     }
@@ -87,14 +106,21 @@ public class SemanticAnalyzer {
             }
         }
 
-        // Generar respuesta JSON
+        // Determina si la receta es semánticamente válida (sin errores) y genera la salida JSON correspondiente.
         boolean valid = errors.isEmpty();
         printResultJson(valid, errors, warnings, ingredients);
     }
 
+    /**
+     * Parsea una cadena JSON que contiene una lista de objetos token sin requerir librerías externas.
+     * Utiliza expresiones regulares para extraer los pares clave-valor de cada objeto JSON.
+     * 
+     * @param json Cadena de texto JSON con los tokens de entrada.
+     * @return Una lista de mapas, donde cada mapa representa un token con sus atributos.
+     */
     private static List<Map<String, String>> parseTokensJson(String json) {
         List<Map<String, String>> tokens = new ArrayList<>();
-        // Encontrar objetos JSON del tipo {"type": "...", "value": "...", "origin": "..."}
+        // Expresión regular para encontrar llaves contenedoras de objetos JSON individuales: {}
         Pattern objectPattern = Pattern.compile("\\{[^{}]*\\}");
         Matcher objectMatcher = objectPattern.matcher(json);
         
@@ -102,11 +128,12 @@ public class SemanticAnalyzer {
             String obj = objectMatcher.group();
             Map<String, String> token = new HashMap<>();
             
-            // Extraer pares clave-valor
+            // Expresión regular para extraer pares "clave" : "valor" o "clave" : número
             Pattern kvPattern = Pattern.compile("\"([^\"]+)\"\\s*:\\s*(?:\"([^\"]*)\"|(\\d+))");
             Matcher kvMatcher = kvPattern.matcher(obj);
             while (kvMatcher.find()) {
                 String key = kvMatcher.group(1);
+                // Si el valor capturado es numérico o de texto, lo asocia a su clave correspondiente.
                 String val = kvMatcher.group(2) != null ? kvMatcher.group(2) : kvMatcher.group(3);
                 token.put(key, val);
             }
@@ -117,6 +144,10 @@ public class SemanticAnalyzer {
         return tokens;
     }
 
+    /**
+     * Imprime en la salida estándar la representación JSON del resultado del análisis semántico,
+     * detallando el estado de validez, errores, advertencias e ingredientes encontrados.
+     */
     private static void printResultJson(boolean valid, List<String> errors, List<String> warnings, List<String> ingredients) {
         StringBuilder sb = new StringBuilder();
         sb.append("{\n");
@@ -149,10 +180,18 @@ public class SemanticAnalyzer {
         System.out.println(sb.toString());
     }
 
+    /**
+     * Imprime una estructura JSON estándar que representa un fallo crítico en la ejecución del analizador
+     * (por ejemplo, fallos de lectura de la entrada estándar).
+     */
     private static void printErrorJson(String errMsg) {
         System.out.println("{\n  \"valid\": false,\n  \"errors\": [\"" + escapeJson(errMsg) + "\"],\n  \"warnings\": [],\n  \"ingredients\": []\n}");
     }
 
+    /**
+     * Escapa caracteres especiales (como comillas, barras invertidas y saltos de línea)
+     * para asegurar que las cadenas generadas sean JSON válidos.
+     */
     private static String escapeJson(String str) {
         if (str == null) return "";
         return str.replace("\\", "\\\\")

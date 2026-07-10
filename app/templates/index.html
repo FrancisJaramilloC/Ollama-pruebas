@@ -26,7 +26,7 @@
         </div>
         <div class="header-tags">
             <span class="badge badge-python">Python (Flask)</span>
-            <span class="badge badge-java">Java 21</span>
+            <span class="badge badge-java">Java</span>
             <span class="badge badge-llm">LLM (Ollama)</span>
         </div>
     </header>
@@ -95,6 +95,19 @@
                 <!-- Contenido de los Resultados -->
                 <div id="compilation-results" class="results-content hidden">
                     
+                    <!-- INTERPRETACIÓN DE ERRORES LLM -->
+                    <div id="card-llm-errors" class="result-card card-llm-errors hidden">
+                        <div class="card-title">
+                            <span class="step-num">🤖 LLM</span>
+                            <h3>Interpretación de Errores</h3>
+                        </div>
+                        <div class="card-body">
+                            <div id="llm-error-explanation" class="status-msg-box warning-llm">
+                                <!-- La interpretación se inyectará aquí -->
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- FASE 1: LÉXICO -->
                     <div class="result-card card-lexical">
                         <div class="card-title">
@@ -127,7 +140,7 @@
                     <div class="result-card card-semantic" id="card-semantica">
                         <div class="card-title">
                             <span class="step-num">Fase 3</span>
-                            <h3>Análisis Semántico (Java 21)</h3>
+                            <h3>Análisis Semántico (Java)</h3>
                             <span id="semantic-status-badge" class="badge-status">Pendiente</span>
                         </div>
                         <div class="card-body">

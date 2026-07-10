@@ -79,6 +79,17 @@ document.addEventListener("DOMContentLoaded", () => {
     function displayResults(data) {
         compilationResults.classList.remove("hidden");
 
+        // --- LLM ERROR EXPLANATION ---
+        const llmErrorCard = document.getElementById("card-llm-errors");
+        const llmErrorExplanation = document.getElementById("llm-error-explanation");
+        
+        if (data.error_explicacion) {
+            llmErrorCard.classList.remove("hidden");
+            llmErrorExplanation.innerHTML = parseMarkdown(data.error_explicacion);
+        } else {
+            llmErrorCard.classList.add("hidden");
+        }
+
         // --- FASE 1: TOKENS ---
         tokenList.innerHTML = "";
         data.tokens.forEach(tok => {
@@ -120,7 +131,7 @@ document.addEventListener("DOMContentLoaded", () => {
             syntaxDetails.innerHTML = `<strong>Error Sintáctico:</strong> ${escapeHtml(data.sintaxis.error)}`;
         }
 
-        // --- FASE 3: SEMÁNTICA (JAVA) ---
+        // --- FASE 3: SEMÁNTICA ---
         const semanticCard = document.getElementById("card-semantica");
         ingredientsTags.innerHTML = "";
         detectedIngredientsContainer.classList.add("hidden");
@@ -129,7 +140,7 @@ document.addEventListener("DOMContentLoaded", () => {
             semanticStatusBadge.textContent = "VÁLIDO";
             semanticStatusBadge.className = "badge-status valid";
             
-            let htmlContent = "<strong>Éxito Semántico:</strong> El programa pasó la validación del analizador implementado en Java 21 sin errores.";
+            let htmlContent = "<strong>Éxito Semántico:</strong> El programa pasó la validación del analizador semántico sin errores.";
             
             // Si hay warnings, los mostramos
             if (data.semantica.warnings && data.semantica.warnings.length > 0) {
@@ -145,7 +156,7 @@ document.addEventListener("DOMContentLoaded", () => {
             
             semanticDetails.className = "status-msg-box success";
             semanticDetails.innerHTML = htmlContent;
-
+  
             // Renderizar ingredientes detectados
             if (data.semantica.ingredients && data.semantica.ingredients.length > 0) {
                 detectedIngredientsContainer.classList.remove("hidden");
@@ -160,7 +171,7 @@ document.addEventListener("DOMContentLoaded", () => {
             semanticStatusBadge.textContent = "ERROR";
             semanticStatusBadge.className = "badge-status invalid";
             
-            let htmlContent = "<strong>Error Semántico:</strong> Se detectaron problemas en la validación semántica ejecutada en Java 21.<br>";
+            let htmlContent = "<strong>Error Semántico:</strong> Se detectaron problemas en la validación semántica.<br>";
             
             if (data.semantica.errors && data.semantica.errors.length > 0) {
                 htmlContent += `
@@ -291,6 +302,62 @@ document.addEventListener("DOMContentLoaded", () => {
 
         rootUl.appendChild(rootLi);
         container.appendChild(rootUl);
+    }
+
+    // Simple Markdown to HTML parser for formatting the LLM response
+    function parseMarkdown(md) {
+        if (!md) return "";
+        let html = md;
+        
+        // Escape HTML to avoid XSS
+        html = html
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+            
+        // Convert bold **text** or __text__
+        html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+        html = html.replace(/__(.*?)__/g, "<strong>$1</strong>");
+        
+        // Convert inline code `code`
+        html = html.replace(/`(.*?)`/g, "<code>$1</code>");
+        
+        // Convert bullet lists and paragraphs
+        const lines = html.split("\n");
+        let inList = false;
+        let newLines = [];
+        
+        for (let line of lines) {
+            let trimmed = line.trim();
+            if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
+                if (!inList) {
+                    newLines.push("<ul>");
+                    inList = true;
+                }
+                newLines.push(`<li>${trimmed.substring(2)}</li>`);
+            } else {
+                if (inList) {
+                    newLines.push("</ul>");
+                    inList = false;
+                }
+                if (trimmed.length > 0) {
+                    if (trimmed.startsWith("### ")) {
+                        newLines.push(`<h4>${trimmed.substring(4)}</h4>`);
+                    } else if (trimmed.startsWith("## ")) {
+                        newLines.push(`<h3>${trimmed.substring(3)}</h3>`);
+                    } else if (trimmed.startsWith("# ")) {
+                        newLines.push(`<h2>${trimmed.substring(2)}</h2>`);
+                    } else {
+                        newLines.push(`<p>${trimmed}</p>`);
+                    }
+                }
+            }
+        }
+        if (inList) {
+            newLines.push("</ul>");
+        }
+        
+        return newLines.join("\n");
     }
 
     // Helper: Escape HTML strings to prevent XSS

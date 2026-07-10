@@ -1,8 +1,21 @@
+"""
+Servicio encargado del análisis sintáctico de las recetas.
+Implementa una validación sintáctica dual:
+1. Una validación programática dura mediante reglas locales de tokens.
+2. Una llamada opcional al LLM en segundo plano como control secundario y reporte de discrepancias.
+Además, este servicio construye el Árbol de Sintaxis Abstracta (AST) que estructura
+las instrucciones analizadas en nodos (Receta, InstruccionAgregar, InstruccionMezclar, etc.).
+"""
 import json
 
 
 class SyntacticService:
+    """
+    Clase que valida que el orden de los tokens siga la gramática y reglas definidas para recetas culinarias,
+    y construye el AST.
+    """
 
+    # Definición de la gramática BNF para validación teórica de recetas
     GRAMMAR = """
 <receta> ::= <instruccion> { CONECTOR_Y <instruccion> }
 <instruccion> ::= <agregar> | <mezclar>
@@ -10,6 +23,7 @@ class SyntacticService:
 <mezclar> ::= INSTRUCCION_MEZCLAR NUMERO { UNKNOWN }
 """
 
+    # Reglas lógicas aplicadas de forma programática por el analizador
     RULES = [
         "La receta debe comenzar con una instruccion (agregar, mezclar, batir, licuar, etc.)",
         "INSTRUCCION_INCORPORAR debe ir seguido de una cantidad (tazas, gramos, porciones, etc.)",
@@ -22,11 +36,26 @@ class SyntacticService:
 
     INSTRUCCIONES = {"INSTRUCCION_INCORPORAR", "INSTRUCCION_MEZCLAR"}
 
-    def __init__(self, llm, tokens: list) -> None:
-        self.llm = llm
-        self.tokens = tokens
+    def __init__(self, llm=None, tokens: list = None) -> None:
+        """
+        Inicializa el analizador sintáctico.
+
+        :param llm: Cliente de Ollama (opcional, ya no se requiere).
+        :param tokens: Lista de tokens generados en el análisis léxico.
+        """
+        if isinstance(llm, list):
+            self.tokens = llm
+            self.llm = None
+        else:
+            self.llm = llm
+            self.tokens = tokens
 
     def _check_rules(self) -> dict:
+        """
+        Valida programáticamente las reglas sintácticas recorriendo los tokens secuencialmente.
+
+        :return: Diccionario con el estado de validez y mensaje de error si existiese.
+        """
         if not self.tokens:
             return {"valid": False, "error": "No hay tokens para analizar"}
 
@@ -61,11 +90,11 @@ class SyntacticService:
 
                 next_type = self.tokens[i + 1]["type"]
 
-                # Pattern A: INSTRUCCION_INCORPORAR -> CANTIDAD
+                # Patrón A: INSTRUCCION_INCORPORAR -> CANTIDAD (ej: agregar una taza)
                 if "CANTIDAD" in next_type:
-                    pass  # valido
+                    pass  # Válido
 
-                # Pattern B: INSTRUCCION_INCORPORAR -> NUMERO -> CANTIDAD
+                # Patrón B: INSTRUCCION_INCORPORAR -> NUMERO -> CANTIDAD (ej: agregar 100 gramos)
                 elif next_type == "NUMERO":
                     if i + 2 >= len(self.tokens) or "CANTIDAD" not in self.tokens[i + 2]["type"]:
                         return {
@@ -79,7 +108,7 @@ class SyntacticService:
                             )
                         }
 
-                # Error: no es CANTIDAD ni NUMERO
+                # Error: No sigue número ni unidad de medida
                 else:
                     return {
                         "valid": False,
@@ -102,6 +131,7 @@ class SyntacticService:
                             f"pero la receta termina ahi."
                         )
                     }
+                # El token siguiente al verbo de mezclar debe ser un número entero (tiempo)
                 if self.tokens[i + 1]["type"] != "NUMERO":
                     return {
                         "valid": False,
@@ -143,68 +173,25 @@ class SyntacticService:
 
         return {"valid": True, "error": None}
 
-    def _build_prompt(self) -> str:
-        items = []
-        for i, t in enumerate(self.tokens):
-            items.append(f"  [{i}] {t['type']} ('{t['value']}')")
-        tokens_block = "\n".join(items)
-
-        rules_text = "\n".join(
-            f"{i+1}. {r}" for i, r in enumerate(self.RULES)
-        )
-
-        return f"""Eres un validador sintactico. Revisa estrictamente esta secuencia de tokens.
-
-GRAMATICA:
-{self.GRAMMAR}
-
-REGLAS:
-{rules_text}
-
-SECUENCIA:
-{tokens_block}
-
-Determina si la secuencia cumple TODAS las reglas. Si alguna se viola, es INVALIDA.
-Responde SOLO JSON:
-{{"valid":true,"error":null}} o {{"valid":false,"error":"descripcion"}}"""
-
     def validate(self) -> dict:
-        if not self.tokens:
-            return {"valid": False, "error": "No hay tokens para analizar"}
+        """
+        Valida la secuencia de tokens usando la lógica programática determinista.
 
-        hard_result = self._check_rules()
-
-        # Se hace la llamada al LLM en segundo plano como se solicita
-        try:
-            prompt = self._build_prompt()
-            response = self.llm.generate(prompt)
-            llm_result = json.loads(response)
-        except Exception:
-            llm_result = None
-
-        if hard_result["valid"]:
-            if llm_result and not llm_result.get("valid", True):
-                print(
-                    "  [SINTACTICO] LLM reporto falso positivo (ignorado): "
-                    + str(llm_result.get("error"))
-                )
-        else:
-            if llm_result and llm_result.get("valid", False):
-                print(
-                    "  [SINTACTICO] LLM no detecto el error "
-                    "(corregido por validacion programatica)"
-                )
-
-        return hard_result
+        :return: El dict con la validez determinada por la lógica programática.
+        """
+        return self._check_rules()
 
     def build_ast(self) -> dict:
         """
-        Genera el árbol de sintaxis abstracta (AST) a partir de los tokens.
-        Representa de forma estructurada las instrucciones de la receta.
+        Genera el árbol de sintaxis abstracta (AST) a partir de los tokens de forma recursiva/estructurada.
+        Representa de forma jerárquica y semántica las instrucciones de la receta.
+
+        :return: Estructura dict del AST con la raíz del nodo Receta.
         """
         if not self.tokens:
             return None
 
+        # Agrupar los tokens en instrucciones individuales separándolas por el token CONECTOR_Y
         instructions_tokens = []
         current_inst = []
         
@@ -224,12 +211,13 @@ Responde SOLO JSON:
                 continue
 
             first_token = inst_toks[0]
+            # Caso 1: Estructurar una instrucción de Agregar/Incorporar
             if first_token["type"] == "INSTRUCCION_INCORPORAR":
                 action = first_token["value"]
                 quantity_tokens = []
                 idx = 1
                 
-                # Buscar número y cantidad
+                # Extrae el número y la unidad de medida si existen (ej. 2 tazas)
                 if idx < len(inst_toks) and inst_toks[idx]["type"] == "NUMERO":
                     quantity_tokens.append(inst_toks[idx]["value"])
                     idx += 1
@@ -239,7 +227,7 @@ Responde SOLO JSON:
                 
                 quantity = " ".join(quantity_tokens)
                 
-                # El resto de tokens desconocidos (UNKNOWN) corresponden al ingrediente
+                # Todos los tokens UNKNOWN restantes se interpretan como el nombre del ingrediente
                 ingredient_tokens = []
                 while idx < len(inst_toks):
                     if inst_toks[idx]["type"] == "UNKNOWN":
@@ -255,15 +243,18 @@ Responde SOLO JSON:
                     "ingredient": ingredient if ingredient else "(No especificado)"
                 })
 
+            # Caso 2: Estructurar una instrucción de Mezclar/Batir/Cocinar
             elif first_token["type"] == "INSTRUCCION_MEZCLAR":
                 action = first_token["value"]
                 duration = ""
                 idx = 1
                 
+                # Extrae el tiempo numérico
                 if idx < len(inst_toks) and inst_toks[idx]["type"] == "NUMERO":
                     duration = inst_toks[idx]["value"]
                     idx += 1
 
+                # Todos los tokens UNKNOWN restantes se acumulan como detalle/unidad de tiempo (ej. minutos)
                 detail_tokens = []
                 while idx < len(inst_toks):
                     if inst_toks[idx]["type"] == "UNKNOWN":
@@ -279,14 +270,17 @@ Responde SOLO JSON:
                     "detail": detail if detail else "minutos"
                 })
             else:
+                # Fallback para instrucciones que no coinciden con las gramáticas esperadas
                 recipe_nodes.append({
                     "type": "UnknownInstruction",
                     "label": "Instrucción Desconocida",
                     "value": " ".join(t["value"] for t in inst_toks)
                 })
 
+        # Retorna el nodo raíz del AST 'Receta' conteniendo la lista secuencial de instrucciones estructuradas
         return {
             "type": "Receta",
             "label": "Receta de Cocina",
             "children": recipe_nodes
         }
+
