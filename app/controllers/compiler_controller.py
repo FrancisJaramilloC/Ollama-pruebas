@@ -40,13 +40,27 @@ def analyze():
         return jsonify({"error": "Debe proporcionar una receta en el campo 'source'."}), 400
 
     try:
+        # Pre-procesar la receta para admitir múltiples líneas y unirlas con " y " de forma limpia
+        lines = [line.strip() for line in source.splitlines() if line.strip()]
+        cleaned_lines = []
+        for line in lines:
+            # Elimina " y" al final o "y " al inicio de cada línea si existen para evitar conectores duplicados
+            if line.endswith(" y"):
+                line = line[:-2].strip()
+            if line.startswith("y "):
+                line = line[2:].strip()
+            if line:
+                cleaned_lines.append(line)
+        
+        processed_source = " y ".join(cleaned_lines)
+
         # Inicializar el cliente LLM (Ollama) y los servicios del compilador
         llm = OllamaClient()
         lexer = LexicalService(llm)
         
         # 1. Fase 1: Análisis Léxico Concurrente
         # Clasifica palabras del texto usando un AFD y llamadas paralelas al LLM
-        tokens = lexer.analyze(source)
+        tokens = lexer.analyze(processed_source)
         
         # 2. Fase 2: Análisis Sintáctico (Dual: Programático + LLM)
         # Valida que el orden de los tokens cumpla con las reglas gramaticales definidas

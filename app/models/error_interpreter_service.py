@@ -50,7 +50,7 @@ class ErrorInterpreterService:
         errors_text = "\n".join(errors_list)
 
         prompt = f"""
-Eres un asistente experto en cocina y compiladores de recetas. Tu objetivo es explicarle al usuario de forma clara, amigable y muy didáctica los errores de compilación (sintácticos o semánticos) que ocurrieron con su receta.
+Eres un asistente experto en cocina y compiladores de recetas. Tu objetivo es explicarle al usuario de forma muy breve, clara y directa los errores de compilación que ocurrieron con su receta.
 
 Receta ingresada por el usuario:
 "{source}"
@@ -58,11 +58,12 @@ Receta ingresada por el usuario:
 Errores técnicos detectados:
 {errors_text}
 
-Instrucciones para tu respuesta:
-1. Explica de manera simple y constructiva por qué falló la receta, traduciendo el error técnico a lenguaje cotidiano.
-2. Identifica el origen exacto del problema (ej. falta de ingredientes, mezclar antes de agregar, cantidades mal especificadas, etc.).
-3. Proporciona un ejemplo corregido y válido de cómo debería escribirse la receta para que el compilador la acepte sin problemas.
-4. Responde en español utilizando formato Markdown (negritas, viñetas, etc.). Mantén un tono amigable, claro y conciso.
+Instrucciones para tu respuesta (CUMPLE ESTRICTAMENTE):
+1. NO uses ningún tipo de emoji.
+2. Sé extremadamente conciso y preciso. Explica el problema en un máximo de 2 o 3 oraciones cortas.
+3. Traduce los términos técnicos a explicaciones cotidianas y sencillas.
+4. Proporciona un único ejemplo corregido de receta que el compilador acepte sin problemas.
+5. Usa formato Markdown limpio (por ejemplo, negritas o viñetas simples).
 
 Respuesta:
 """

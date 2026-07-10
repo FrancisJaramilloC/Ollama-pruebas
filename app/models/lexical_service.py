@@ -21,6 +21,7 @@ class LexicalService:
     TOKEN_PATTERNS = [
         ("NUMERO",    r"\d+"),
         ("CONECTOR_Y", r"\by\b"),
+        ("CANTIDAD",  r"\b(un|una|dos|tres|cuatro|cinco|un par de)?\s*(tazas? medidoras?|tazas?|gramos?|grs?|gr|cucharadas?|cucharaditas?|pizcas?|mililitros?|ml|litros?|l|lt|kilogramos?|kg|kilos?|piezas?|puños?|scoops?|chorritos?)\b\s*(de\s+(la|las|lo|los)\b|de\b)?"),
         ("SPACE",     r"\s+"),
         ("UNKNOWN",   r"\S+"),
     ]
@@ -136,6 +137,14 @@ Utiliza un lenguaje claro, sencillo y facil de entender. """
             # Validar que INSTRUCCION_MEZCLAR comience con un verbo de mezclado conocido
             elif token_type == "INSTRUCCION_MEZCLAR":
                 if fragment_lower in LexicalService.KNOWN_MEZCLAR:
+                    # Si el fragmento es la palabra individual "mezcla", verificamos que no sea un sustantivo
+                    # (ej. "la mezcla", "una mezcla", "sobre la mezcla")
+                    if fragment_lower == "mezcla":
+                        idx = block_text.lower().find("mezcla")
+                        if idx > 0:
+                            prev_words = block_text[:idx].strip().lower().split()
+                            if prev_words and prev_words[-1] in ("la", "una", "esta", "otra", "de", "esa", "aquella"):
+                                continue
                     valid[fragment] = token_type
                 else:
                     words = fragment_lower.split()
@@ -231,7 +240,7 @@ Utiliza un lenguaje claro, sencillo y facil de entender. """
         )
 
         raw_tokens = []
-        for match in re.finditer(pattern, source):
+        for match in re.finditer(pattern, source, re.IGNORECASE):
             ttype = match.lastgroup
             tvalue = match.group()
             if ttype == "SPACE":
@@ -315,22 +324,22 @@ Utiliza un lenguaje claro, sencillo y facil de entender. """
                     classifications = block_info["classifications"]
                     block_text = block_info["text"]
 
-                    # Filtrar fragmentos clasificados válidos que existan en el texto del bloque
+                    # Filtrar fragmentos clasificados válidos que existan en el texto del bloque (case-insensitive)
                     matching = {
                         frag: tok
                         for frag, tok in classifications.items()
-                        if frag in block_text
+                        if frag.lower() in block_text.lower()
                     }
 
                     if matching:
-                        # Ordena los fragmentos según su posición de aparición en el bloque
+                        # Ordena los fragmentos según su posición de aparición en el bloque (case-insensitive)
                         sorted_frags = sorted(
                             matching.items(),
-                            key=lambda x: block_text.index(x[0])
+                            key=lambda x: block_text.lower().index(x[0].lower())
                         )
                         pos = 0
                         for fragment, tok_type in sorted_frags:
-                            idx_f = block_text.find(fragment, pos)
+                            idx_f = block_text.lower().find(fragment.lower(), pos)
                             if idx_f == -1:
                                 continue
                             # Si hay texto previo no clasificado antes del fragmento, se marca como UNKNOWN
@@ -340,9 +349,10 @@ Utiliza un lenguaje claro, sencillo y facil de entender. """
                                     final_tokens.append(_make_token(
                                         "UNKNOWN", remaining, "LLM"
                                     ))
-                            # Agregar el token clasificado por el LLM
+                            # Agregar el token clasificado por el LLM conservando su capitalización original
+                            original_value = block_text[idx_f:idx_f + len(fragment)]
                             final_tokens.append(_make_token(
-                                tok_type, fragment, "LLM"
+                                tok_type, original_value, "LLM"
                               ))
                             pos = idx_f + len(fragment)
                         # Agregar cualquier texto restante no clasificado al final del bloque como UNKNOWN
