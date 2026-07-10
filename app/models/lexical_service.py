@@ -25,6 +25,27 @@ class LexicalService:
         ("UNKNOWN",   r"\S+"),
     ]
 
+    # Verbos de incorporación conocidos
+    KNOWN_INCORPORAR = {
+        "agregar", "anadir", "añadir", "poner", "incorporar", "adicionar",
+        "echar", "verter", "colocar", "agrega", "agregue", "anade",
+        "añade", "integra", "integrar", "integrando", "suma", "sumar",
+        "introduce", "introducir", "vierte", "vertiendo", "espolvorea",
+        "espolvorear", "rocía", "rociar", "vaciar", "vacía", "combina", "combinar"
+    }
+
+    # Verbos de mezclado/cocción conocidos
+    KNOWN_MEZCLAR = {
+        "mezclar", "batir", "revolver", "remover", "agitar",
+        "mezcle", "bata", "revuelva", "mezcla", "bate",
+        "licuar", "licue", "hornear", "hornee", "reposar",
+        "cocinar", "cocine", "hervir", "hierva", "asar",
+        "ase", "dorar", "dore", "saltear", "saltee",
+        "refrigerar", "freir", "amasar", "enfriar", "congelar",
+        "derretir", "fundir", "colar", "tamizar", "licuando",
+        "batiendo", "mezclando"
+    }
+
     def __init__(self, llm):
         """
         Inicializa el analizador léxico asociando el cliente de LLM.
@@ -37,6 +58,9 @@ class LexicalService:
         """
         Construye el prompt estructurado para solicitar la clasificación de tokens al LLM.
         """
+        incorporar_examples = ", ".join(f'"{v}"' for v in sorted(self.KNOWN_INCORPORAR))
+        mezclar_examples = ", ".join(f'"{v}"' for v in sorted(self.KNOWN_MEZCLAR))
+
         return f"""
 Eres un clasificador lexico especializado en recetas de cocina.
 Analiza a detalle el siguiente fragmento de texto y asigna tokens a las palabras o frases que reconozcas:
@@ -44,9 +68,9 @@ Analiza a detalle el siguiente fragmento de texto y asigna tokens a las palabras
 Fragmento: "{block_text}"
 
 Tokens disponibles:
-- INSTRUCCION_INCORPORAR: verbos que indican agregar o incorporar (ej: "agregar", "anadir", "añadir", "poner", "incorporar", "adicionar", "echar", "verter", "colocar", "agrega", "agregue", "anade", "añade", "integra", "integrar", "integrando", "suma", "sumar", "introduce", "introducir", "vierte", "vertiendo", "espolvorea", "espolvorear", "rocía", "rociar", "vaciar", "vacía", "combina", "combinar")
+- INSTRUCCION_INCORPORAR: verbos que indican agregar o incorporar (ej: {incorporar_examples})
 - CANTIDAD: palabras o frases que indican únicamente una unidad de medida. Ejemplos válidos: "una cucharada de", "un par de tazas de", "dos cucharaditas de", "500 gramos de", "100 ml de", "una pizca de". IMPORTANTE: NO debes incluir el nombre del ingrediente dentro del token CANTIDAD. Por ejemplo, en la frase "una cucharada de harina", debes clasificar únicamente "una cucharada de" como CANTIDAD, de modo que "harina" quede sin clasificar (UNKNOWN) y pueda ser identificada como el ingrediente.
-- INSTRUCCION_MEZCLAR: instrucciones de mezclado, cocción o preparación física. Ejemplos: "mezclar", "batir", "revolver", "remover", "agitar", "mezcle", "bata", "revuelva", "mezcla", "bate", "licuar", "licue", "hornear", "hornee", "reposar", "cocinar", "cocine", "hervir", "hierva", "asar", "ase", "dorar", "dore", "saltear", "saltee", "refrigerar", "refrigerar por", "saltear por", "freir por", "amasar", "amasar por", "licuar por", "batir durante", "hornear durante", "reposar por", "enfriar", "congelar", "derretir", "fundir", "colar", "tamizar", "licuando", "batiendo", "mezclando".
+- INSTRUCCION_MEZCLAR: instrucciones de mezclado, cocción o preparación física. Ejemplos: {mezclar_examples}, o seguidos de preposiciones/duración como "batir por", "batir durante", "cocinar por", "cocinar durante".
 
 Instrucciones:
 1. Identifica dentro del fragmento las palabras o frases que coincidan con los tokens.
@@ -70,24 +94,6 @@ Utiliza un lenguaje claro, sencillo y facil de entender. """
         Filtra y valida las clasificaciones recibidas del LLM para evitar alucinaciones,
         errores de concordancia o tokens inválidos.
         """
-        KNOWN_INSTRUCCION_INCORPORAR = {
-            "agregar", "anadir", "añadir", "poner", "incorporar",
-            "adicionar", "echar", "verter", "colocar", "agrega",
-            "agregue", "anade", "añade", "integra", "integrar",
-            "integrando", "suma", "sumar", "introduce", "introducir",
-            "vierte", "vertiendo", "espolvorea", "espolvorear",
-            "rocía", "rociar", "vaciar", "vacía", "combina", "combinar"
-        }
-        KNOWN_INSTRUCCION_MEZCLAR = {
-            "mezclar", "batir", "revolver", "remover", "agitar",
-            "mezcle", "bata", "revuelva", "mezcla", "bate",
-            "licuar", "licue", "hornear", "hornee", "reposar",
-            "cocinar", "cocine", "hervir", "hierva", "asar",
-            "ase", "dorar", "dore", "saltear", "saltee",
-            "refrigerar", "freir", "amasar", "enfriar", "congelar",
-            "derretir", "fundir", "colar", "tamizar", "licuando",
-            "batiendo", "mezclando"
-        }
         CONCORDANCIA_ERRONEA = [
             "un tazas", "un taza", "una tazas", "el tazas",
             "la tazas", "los taza", "las taza"
@@ -120,20 +126,20 @@ Utiliza un lenguaje claro, sencillo y facil de entender. """
             # Validar que INSTRUCCION_INCORPORAR sea exactamente un verbo conocido.
             # Si el LLM agrupó de más (ej: "agregar una cucharada de"), extraemos solo la primera palabra (el verbo)
             elif token_type == "INSTRUCCION_INCORPORAR":
-                if fragment_lower in KNOWN_INSTRUCCION_INCORPORAR:
+                if fragment_lower in LexicalService.KNOWN_INCORPORAR:
                     valid[fragment] = token_type
                 else:
                     first_word = fragment_lower.split()[0]
-                    if first_word in KNOWN_INSTRUCCION_INCORPORAR:
+                    if first_word in LexicalService.KNOWN_INCORPORAR:
                         valid[first_word] = token_type
 
             # Validar que INSTRUCCION_MEZCLAR comience con un verbo de mezclado conocido
             elif token_type == "INSTRUCCION_MEZCLAR":
-                if fragment_lower in KNOWN_INSTRUCCION_MEZCLAR:
+                if fragment_lower in LexicalService.KNOWN_MEZCLAR:
                     valid[fragment] = token_type
                 else:
                     words = fragment_lower.split()
-                    if words[0] in KNOWN_INSTRUCCION_MEZCLAR:
+                    if words[0] in LexicalService.KNOWN_MEZCLAR:
                         # Si el fragmento es de 2 palabras (ej. "batir por"), lo consideramos válido completo
                         if len(words) == 2:
                             valid[fragment] = token_type
@@ -145,7 +151,6 @@ Utiliza un lenguaje claro, sencillo y facil de entender. """
                                 valid[clean_frag] = token_type
                             else:
                                 valid[words[0]] = token_type
-
             else:
                 valid[fragment] = token_type
 
