@@ -464,15 +464,42 @@ body {
     color: var(--text-muted);
 }
 
-/* Origin specific pill colors */
+/* Origin specific pill colors (fallback if type-specific color not defined) */
 .token-pill.origin-afd .token-type {
     background: var(--afd-badge);
 }
 .token-pill.origin-llm .token-type {
     background: var(--llm-badge);
 }
+
+/* Specific Token-Type Badges styling */
+.token-pill.type-conector-y .token-type {
+    background: #ec4899; /* Pink/Magenta for Conector Y */
+    color: #fff;
+}
+.token-pill.type-cantidad .token-type {
+    background: #3b82f6; /* Soft Blue for Cantidad */
+    color: #fff;
+}
+.token-pill.type-unidad-medida .token-type {
+    background: #0ea5e9; /* Sky Blue for Medida */
+    color: #fff;
+}
+.token-pill.type-numero .token-type {
+    background: #10b981; /* Green for Numero */
+    color: #fff;
+}
+.token-pill.type-incorporar .token-type {
+    background: #8b5cf6; /* Violet for Incorporar */
+    color: #fff;
+}
+.token-pill.type-mezclar .token-type {
+    background: #14b8a6; /* Teal/Aqua for Mezclar */
+    color: #fff;
+}
 .token-pill.type-unknown .token-type {
     background: var(--unknown-badge);
+    color: #fff;
 }
 
 .origin-legend {

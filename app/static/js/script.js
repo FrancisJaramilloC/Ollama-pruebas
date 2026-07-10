@@ -95,13 +95,24 @@ document.addEventListener("DOMContentLoaded", () => {
         data.tokens.forEach(tok => {
             const pill = document.createElement("div");
             
-            // Clean up type names for better representation
+            // Clean up type names and assign specific class types for custom coloring
             let typeLabel = tok.type;
             let classType = "";
             if (tok.type === "INSTRUCCION_INCORPORAR") {
                 typeLabel = "INCORPORAR";
+                classType = "type-incorporar";
             } else if (tok.type === "INSTRUCCION_MEZCLAR") {
                 typeLabel = "MEZCLAR";
+                classType = "type-mezclar";
+            } else if (tok.type === "CONECTOR_Y") {
+                classType = "type-conector-y";
+            } else if (tok.type === "CANTIDAD") {
+                classType = "type-cantidad";
+            } else if (tok.type === "UNIDAD_MEDIDA") {
+                typeLabel = "MEDIDA";
+                classType = "type-unidad-medida";
+            } else if (tok.type === "NUMERO") {
+                classType = "type-numero";
             } else if (tok.type === "UNKNOWN") {
                 classType = "type-unknown";
             }

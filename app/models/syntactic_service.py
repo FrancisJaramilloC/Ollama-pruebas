@@ -91,12 +91,12 @@ class SyntacticService:
                 next_type = self.tokens[i + 1]["type"]
 
                 # Patrón A: INSTRUCCION_INCORPORAR -> CANTIDAD (ej: agregar una taza)
-                if "CANTIDAD" in next_type:
+                if next_type == "CANTIDAD":
                     pass  # Válido
 
-                # Patrón B: INSTRUCCION_INCORPORAR -> NUMERO -> CANTIDAD (ej: agregar 100 gramos)
+                # Patrón B: INSTRUCCION_INCORPORAR -> NUMERO -> CANTIDAD o UNIDAD_MEDIDA (ej: agregar 100 gramos)
                 elif next_type == "NUMERO":
-                    if i + 2 >= len(self.tokens) or "CANTIDAD" not in self.tokens[i + 2]["type"]:
+                    if i + 2 >= len(self.tokens) or self.tokens[i + 2]["type"] not in ("CANTIDAD", "UNIDAD_MEDIDA"):
                         return {
                             "valid": False,
                             "error": (
@@ -108,12 +108,12 @@ class SyntacticService:
                             )
                         }
 
-                # Error: No sigue número ni unidad de medida
+                # Error: No sigue número ni unidad de medida válida
                 else:
                     return {
                         "valid": False,
                         "error": (
-                            f"Despues de '{tvalue}' debe ir una cantidad "
+                            f"Despues de '{tvalue}' debe ir una cantidad valida "
                             f"(ejemplo: '{tvalue} una taza de harina' "
                             f"o '{tvalue} 100 gr de azucar'), "
                             f"pero se encontro '{self.tokens[i + 1]['value']}'."
@@ -221,7 +221,7 @@ class SyntacticService:
                 if idx < len(inst_toks) and inst_toks[idx]["type"] == "NUMERO":
                     quantity_tokens.append(inst_toks[idx]["value"])
                     idx += 1
-                if idx < len(inst_toks) and inst_toks[idx]["type"] in ("CANTIDAD", "CANTIDAD_TAZAS"):
+                if idx < len(inst_toks) and inst_toks[idx]["type"] in ("CANTIDAD", "CANTIDAD_TAZAS", "UNIDAD_MEDIDA"):
                     quantity_tokens.append(inst_toks[idx]["value"])
                     idx += 1
                 

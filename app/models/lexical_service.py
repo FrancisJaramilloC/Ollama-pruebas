@@ -21,7 +21,10 @@ class LexicalService:
     TOKEN_PATTERNS = [
         ("NUMERO",    r"\d+"),
         ("CONECTOR_Y", r"\by\b"),
-        ("CANTIDAD",  r"\b(un|una|dos|tres|cuatro|cinco|un par de)?\s*(tazas? medidoras?|tazas?|gramos?|grs?|gr|cucharadas?|cucharaditas?|pizcas?|mililitros?|ml|litros?|l|lt|kilogramos?|kg|kilos?|piezas?|puños?|scoops?|chorritos?)\b\s*(de\s+(la|las|lo|los)\b|de\b)?"),
+        # CANTIDAD obligatoriamente requiere prefijo de artículo/número escrito (ej: "una taza de", "dos cucharadas")
+        ("CANTIDAD",  r"\b(un|una|dos|tres|cuatro|cinco|un par de)\s+(tazas? medidoras?|tazas?|gramos?|grs?|gr|cucharadas?|cucharaditas?|pizcas?|mililitros?|ml|litros?|l|lt|kilogramos?|kg|kilos?|piezas?|puños?|scoops?|chorritos?)\b\s*(de\s+(la|las|lo|los)\b|de\b)?"),
+        # UNIDAD_MEDIDA es únicamente la unidad de medida por sí sola (ej: "taza de", "gramos")
+        ("UNIDAD_MEDIDA", r"\b(tazas? medidoras?|tazas?|gramos?|grs?|gr|cucharadas?|cucharaditas?|pizcas?|mililitros?|ml|litros?|l|lt|kilogramos?|kg|kilos?|piezas?|puños?|scoops?|chorritos?)\b\s*(de\s+(la|las|lo|los)\b|de\b)?"),
         ("SPACE",     r"\s+"),
         ("UNKNOWN",   r"\S+"),
     ]
