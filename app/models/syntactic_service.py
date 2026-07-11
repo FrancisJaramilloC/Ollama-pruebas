@@ -19,15 +19,15 @@ class SyntacticService:
     GRAMMAR = """
 <receta> ::= <instruccion> { CONECTOR_Y <instruccion> }
 <instruccion> ::= <agregar> | <mezclar>
-<agregar> ::= INSTRUCCION_INCORPORAR ( CANTIDAD | NUMERO CANTIDAD ) { UNKNOWN }
-<mezclar> ::= INSTRUCCION_MEZCLAR NUMERO { UNKNOWN }
+<agregar> ::= INSTRUCCION_INCORPORAR ( CANTIDAD | NUMERO [ CANTIDAD | UNIDAD_MEDIDA ] ) { UNKNOWN }
+<mezclar> ::= INSTRUCCION_MEZCLAR { UNKNOWN } NUMERO { UNKNOWN }
 """
 
     # Reglas lógicas aplicadas de forma programática por el analizador
     RULES = [
         "La receta debe comenzar con una instruccion (agregar, mezclar, batir, licuar, etc.)",
         "INSTRUCCION_INCORPORAR debe ir seguido de una cantidad (tazas, gramos, porciones, etc.)",
-        "INSTRUCCION_MEZCLAR debe ir seguido inmediatamente de NUMERO",
+        "INSTRUCCION_MEZCLAR debe contener un tiempo de mezclado/coccion indicado por un NUMERO",
         "CONECTOR_Y separa dos instrucciones y debe ir seguido de una instruccion",
         "No puede haber dos CONECTOR_Y consecutivos",
         "La secuencia no puede comenzar con CONECTOR_Y",
@@ -94,15 +94,15 @@ class SyntacticService:
                 if next_type == "CANTIDAD":
                     pass  # Válido
 
-                # Patrón B: INSTRUCCION_INCORPORAR -> NUMERO -> CANTIDAD o UNIDAD_MEDIDA (ej: agregar 100 gramos)
+                # Patrón B: INSTRUCCION_INCORPORAR -> NUMERO -> CANTIDAD o UNIDAD_MEDIDA o UNKNOWN (ej: agregar 100 gramos o agregar 2 huevos)
                 elif next_type == "NUMERO":
-                    if i + 2 >= len(self.tokens) or self.tokens[i + 2]["type"] not in ("CANTIDAD", "UNIDAD_MEDIDA"):
+                    if i + 2 >= len(self.tokens) or self.tokens[i + 2]["type"] not in ("CANTIDAD", "UNIDAD_MEDIDA", "UNKNOWN"):
                         return {
                             "valid": False,
                             "error": (
                                 f"Despues de '{tvalue} {self.tokens[i + 1]['value']}' "
-                                f"debe ir una unidad de medida "
-                                f"(ejemplo: '{tvalue} 100 gr de azucar'), "
+                                f"debe ir una unidad de medida o ingrediente "
+                                f"(ejemplo: '{tvalue} 100 gr de azucar' o '{tvalue} 2 huevos'), "
                                 f"pero se encontro "
                                 f"'{self.tokens[i + 2]['value'] if i + 2 < len(self.tokens) else 'fin de la receta'}'."
                             )
@@ -122,23 +122,23 @@ class SyntacticService:
 
             # --- Regla 3: INSTRUCCION_MEZCLAR -> NUMERO ---
             if ttype == "INSTRUCCION_MEZCLAR":
-                if i + 1 >= len(self.tokens):
+                found_number = False
+                for j in range(i + 1, len(self.tokens)):
+                    next_tok = self.tokens[j]
+                    next_type = next_tok["type"]
+                    if next_type == "NUMERO":
+                        found_number = True
+                        break
+                    elif next_type in ("CONECTOR_Y", "INSTRUCCION_MEZCLAR", "INSTRUCCION_INCORPORAR"):
+                        break
+                
+                if not found_number:
                     return {
                         "valid": False,
                         "error": (
                             f"Despues de '{tvalue}' debe ir un numero indicando "
                             f"el tiempo (ejemplo: '{tvalue} 5 minutos'), "
-                            f"pero la receta termina ahi."
-                        )
-                    }
-                # El token siguiente al verbo de mezclar debe ser un número entero (tiempo)
-                if self.tokens[i + 1]["type"] != "NUMERO":
-                    return {
-                        "valid": False,
-                        "error": (
-                            f"Despues de '{tvalue}' debe ir un numero indicando "
-                            f"el tiempo (ejemplo: '{tvalue} 5 minutos'), "
-                            f"pero se encontro '{self.tokens[i + 1]['value']}'."
+                            f"pero no se encontro ningun numero en esta instruccion."
                         )
                     }
 
@@ -247,19 +247,21 @@ class SyntacticService:
             elif first_token["type"] == "INSTRUCCION_MEZCLAR":
                 action = first_token["value"]
                 duration = ""
-                idx = 1
                 
-                # Extrae el tiempo numérico
-                if idx < len(inst_toks) and inst_toks[idx]["type"] == "NUMERO":
-                    duration = inst_toks[idx]["value"]
-                    idx += 1
+                # Buscar el token NUMERO
+                num_token_idx = -1
+                for idx, t in enumerate(inst_toks):
+                    if idx > 0 and t["type"] == "NUMERO":
+                        duration = t["value"]
+                        num_token_idx = idx
+                        break
 
-                # Todos los tokens UNKNOWN restantes se acumulan como detalle/unidad de tiempo (ej. minutos)
+                # Todos los tokens restantes (excepto el de acción y el número) se acumulan como detalle/unidad de tiempo
                 detail_tokens = []
-                while idx < len(inst_toks):
-                    if inst_toks[idx]["type"] == "UNKNOWN":
-                        detail_tokens.append(inst_toks[idx]["value"])
-                    idx += 1
+                for idx, t in enumerate(inst_toks):
+                    if idx == 0 or idx == num_token_idx:
+                        continue
+                    detail_tokens.append(t["value"])
                 detail = " ".join(detail_tokens)
 
                 recipe_nodes.append({

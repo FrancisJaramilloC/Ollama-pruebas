@@ -46,10 +46,12 @@ public class SemanticAnalyzer {
                     errors.add("Error Semántico: Se intenta mezclar/batir sin haber agregado ningún ingrediente primero.");
                 }
                 
-                // Validar que el tiempo de mezclado sea lógico (debe estar expresado por el token NUMERO siguiente).
-                if (i + 1 < tokens.size()) {
-                    Map<String, String> nextToken = tokens.get(i + 1);
-                    if ("NUMERO".equals(nextToken.get("type"))) {
+                // Validar que el tiempo de mezclado sea lógico (debe estar expresado por el token NUMERO dentro de la misma instrucción).
+                int j = i + 1;
+                while (j < tokens.size()) {
+                    Map<String, String> nextToken = tokens.get(j);
+                    String nextType = nextToken.get("type");
+                    if ("NUMERO".equals(nextType)) {
                         try {
                             int minutes = Integer.parseInt(nextToken.get("value"));
                             // El tiempo de mezclado debe estar en un rango razonable (1 a 120 minutos).
@@ -59,7 +61,11 @@ public class SemanticAnalyzer {
                         } catch (NumberFormatException e) {
                             errors.add("Error Semántico: El tiempo de mezclado '" + nextToken.get("value") + "' no es un número válido.");
                         }
+                        break;
+                    } else if ("CONECTOR_Y".equals(nextType) || "INSTRUCCION_INCORPORAR".equals(nextType) || "INSTRUCCION_MEZCLAR".equals(nextType)) {
+                        break;
                     }
+                    j++;
                 }
             // Regla 2: Validar instrucciones de agregar/incorporar ingredientes.
             } else if ("INSTRUCCION_INCORPORAR".equals(type)) {
